@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "npx --yes serve -l 5173 .",
+    "test": "node tools/smoke-test.mjs",
     "vendor": "cp node_modules/three/build/three.module.js node_modules/three/build/three.core.js vendor/three/"
   },
   "dependencies": {
