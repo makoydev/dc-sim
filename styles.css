@@ -34,4 +34,248 @@ html, body {
   position: fixed;
   inset: 0;
   pointer-events: none;
+  font-size: 13px;
+  line-height: 1.45;
 }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  backdrop-filter: blur(6px);
+}
+
+.dim { color: var(--dim); }
+.ok { color: var(--ok); }
+.warn { color: var(--warn); }
+.bad { color: var(--bad); }
+.accent { color: var(--accent); }
+
+/* ---- crosshair + interaction prompt ------------------------------------ */
+#crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  border: 1px solid rgba(216, 230, 242, 0.85);
+  background: rgba(216, 230, 242, 0.25);
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+#crosshair.hot {
+  transform: scale(1.6);
+  background: rgba(76, 194, 255, 0.6);
+  border-color: var(--accent);
+}
+
+#prompt {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 42px);
+  transform: translateX(-50%);
+  min-width: 230px;
+  text-align: center;
+  display: none;
+}
+#prompt.show { display: block; }
+#prompt .key {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 5px;
+  margin-right: 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--accent);
+}
+#prompt .hint { color: var(--dim); font-size: 11px; margin-top: 3px; }
+#prompt .track {
+  height: 4px;
+  margin-top: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+  overflow: hidden;
+}
+#prompt .fill { height: 100%; width: 0%; background: var(--accent); }
+
+/* ---- status bar --------------------------------------------------------- */
+#status {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+#status .cell { text-align: left; min-width: 92px; }
+#status .cell b { display: block; font-size: 17px; font-weight: 600; letter-spacing: 0.5px; }
+#status .cell span { color: var(--dim); font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; }
+
+/* ---- checklist ---------------------------------------------------------- */
+#checklist {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 310px;
+  max-height: 66vh;
+  overflow: hidden;
+}
+#checklist h3 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--dim);
+  display: flex;
+  justify-content: space-between;
+}
+#checklist ul { list-style: none; margin: 0; padding: 0; }
+#checklist li {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+#checklist li:first-child { border-top: 0; }
+#checklist li .box {
+  width: 13px;
+  height: 13px;
+  margin-top: 2px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  text-align: center;
+  line-height: 11px;
+  font-size: 10px;
+}
+#checklist li.done { color: var(--dim); }
+#checklist li.done .box { background: var(--ok); border-color: var(--ok); color: #04140d; }
+#checklist li.failed .box { background: var(--bad); border-color: var(--bad); color: #1a0402; }
+#checklist li.active { color: #fff; }
+#checklist li.active .box { border-color: var(--accent); box-shadow: 0 0 8px rgba(76, 194, 255, 0.5); }
+#checklist li small { display: block; color: var(--dim); font-size: 11px; }
+#checklist li .due { margin-left: auto; font-size: 11px; white-space: nowrap; }
+
+/* ---- alerts + log ------------------------------------------------------- */
+#alerts {
+  position: absolute;
+  top: 96px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+}
+.alert {
+  border: 1px solid rgba(255, 95, 86, 0.55);
+  background: rgba(60, 12, 10, 0.75);
+  color: #ffd9d6;
+  padding: 6px 14px;
+  border-radius: 999px;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.alert.warn { border-color: rgba(255, 194, 71, 0.5); background: rgba(60, 44, 6, 0.7); color: #ffe9bb; }
+@keyframes pulse { 50% { opacity: 0.55; } }
+
+#log {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+#log div {
+  background: rgba(8, 12, 17, 0.7);
+  border-left: 2px solid var(--accent);
+  padding: 4px 8px;
+  border-radius: 0 5px 5px 0;
+  animation: slide 0.25s ease;
+}
+#log div.good { border-color: var(--ok); }
+#log div.bad { border-color: var(--bad); }
+#log div.warn { border-color: var(--warn); }
+@keyframes slide { from { opacity: 0; transform: translateX(-10px); } }
+
+/* ---- carried item + stamina --------------------------------------------- */
+#carry {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  width: 190px;
+  text-align: right;
+}
+#stamina {
+  margin-top: 6px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+  overflow: hidden;
+}
+#stamina div { height: 100%; width: 100%; background: var(--accent); transition: width 0.1s linear; }
+
+/* ---- objective marker --------------------------------------------------- */
+#marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  color: var(--accent);
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.9);
+  text-align: center;
+  font-size: 11px;
+  display: none;
+}
+#marker .ring {
+  width: 16px;
+  height: 16px;
+  margin: 0 auto 3px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+/* ---- overlays ----------------------------------------------------------- */
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 45%, rgba(6, 12, 18, 0.86), rgba(2, 4, 6, 0.97));
+  pointer-events: auto;
+}
+.overlay.show { display: flex; }
+.overlay .card {
+  width: min(640px, 88vw);
+  padding: 26px 30px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(9, 14, 20, 0.9);
+}
+.overlay h1 {
+  margin: 0 0 2px;
+  font-size: 30px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+.overlay h2 { margin: 0 0 14px; font-size: 13px; font-weight: 400; color: var(--dim); letter-spacing: 1px; }
+.overlay p { margin: 0 0 10px; color: var(--text); }
+.overlay .keys { display: grid; grid-template-columns: 74px 1fr; gap: 4px 12px; margin: 14px 0 18px; color: var(--dim); }
+.overlay .keys b { color: var(--accent); font-weight: 500; }
+.overlay button {
+  pointer-events: auto;
+  font: inherit;
+  color: #04121a;
+  background: var(--accent);
+  border: 0;
+  border-radius: 6px;
+  padding: 9px 20px;
+  cursor: pointer;
+  letter-spacing: 1px;
+}
+.overlay button:hover { filter: brightness(1.12); }
+.scoreline { display: flex; justify-content: space-between; padding: 5px 0; border-top: 1px solid rgba(255,255,255,0.06); }
+.grade { font-size: 54px; letter-spacing: 2px; text-align: center; margin: 6px 0 2px; }
