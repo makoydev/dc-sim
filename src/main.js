@@ -3,6 +3,10 @@ import { buildHall } from './world.js';
 import { buildRacks, updateRackLeds } from './racks.js';
 import { Player } from './player.js';
 import { buildProps, updateFans } from './props.js';
+import { Interaction } from './interaction.js';
+import { HUD } from './ui.js';
+import { Audio } from './audio.js';
+import { Game } from './game.js';
 
 const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -22,6 +26,13 @@ const racks = buildRacks(scene);
 const { stations, fans } = buildProps(scene);
 const player = new Player(camera, canvas);
 
+const hud = new HUD(document.getElementById('ui'));
+const audio = new Audio();
+const game = new Game({ scene, camera, player, racks, stations, hud, audio });
+const interaction = new Interaction(camera, scene, (target) => game.resolveAction(target));
+
+player.onFootstep = (sprinting) => audio.footstep(sprinting);
+
 function resize() {
   const w = innerWidth;
   const h = innerHeight;
@@ -32,17 +43,111 @@ function resize() {
 addEventListener('resize', resize);
 resize();
 
+// ---- overlays --------------------------------------------------------------
+
+const CONTROLS = `
+  <div class="keys">
+    <b>W A S D</b><span>walk the aisles</span>
+    <b>Mouse</b><span>look around</span>
+    <b>Shift</b><span>sprint (costs stamina)</span>
+    <b>E</b><span>interact — hold for longer jobs</span>
+    <b>Tab</b><span>show / hide the checklist</span>
+    <b>Esc</b><span>pause</span>
+  </div>`;
+
+function showBriefing() {
+  hud.showOverlay(
+    `<h1>Uptime</h1>
+     <h2>Data hall 3 &middot; day shift &middot; 08:00 &ndash; 20:00</h2>
+     <p>You are the engineer on the floor. Work the checklist, answer the tickets
+     that page you during the shift, and keep the SLA above 99.9%.</p>
+     <p class="dim">Failed drives, clogged filters and tripped breakers all cost
+     uptime while they sit open. Parts live in the spares cage; dead hardware
+     goes in the e-waste bin.</p>
+     ${CONTROLS}
+     <button id="begin">Clock in</button>`,
+    (root) => {
+      root.querySelector('#begin').addEventListener('click', () => {
+        hud.hideOverlay();
+        audio.resume();
+        game.start();
+        canvas.requestPointerLock();
+      });
+    },
+  );
+}
+
+function showPause() {
+  hud.showOverlay(
+    `<h1>Paused</h1><h2>The racks are still running without you</h2>${CONTROLS}
+     <button id="resume">Back to the floor</button>`,
+    (root) => {
+      root.querySelector('#resume').addEventListener('click', () => {
+        hud.hideOverlay();
+        canvas.requestPointerLock();
+      });
+    },
+  );
+}
+
+function showReport(report) {
+  const line = (label, value, cls = '') =>
+    `<div class="scoreline"><span class="dim">${label}</span><span class="${cls}">${value}</span></div>`;
+  hud.showOverlay(
+    `<h1>Shift Report</h1>
+     <h2>${report.reason === 'handover' ? 'Handover filed' : 'Clock ran out'} at ${report.clock}</h2>
+     <div class="grade ${report.grade === 'D' ? 'bad' : report.grade === 'S' ? 'ok' : 'accent'}">${report.grade}</div>
+     ${line('Checklist', `${report.done}/${report.total}`)}
+     ${line('Tickets resolved', report.resolved, 'ok')}
+     ${line('SLA breaches', report.missed, report.missed ? 'bad' : 'dim')}
+     ${line('Final uptime', `${report.uptime.toFixed(3)}%`, report.uptime > 99.9 ? 'ok' : 'warn')}
+     ${line('Score', `${report.score}/100`)}
+     <p></p><button id="again">Start another shift</button>`,
+    (root) => {
+      root.querySelector('#again').addEventListener('click', () => location.reload());
+    },
+  );
+}
+
+document.addEventListener('player-lock', (e) => {
+  const locked = e.detail;
+  interaction.enabled = locked;
+  if (!locked && game.phase === 'running') showPause();
+});
+
+addEventListener('keydown', (e) => {
+  if (e.code === 'Tab') hud.toggleChecklist();
+});
+
+showBriefing();
+
+// ---- main loop -------------------------------------------------------------
+
 const clock = new THREE.Clock();
+let reported = false;
 
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.1);
   const elapsed = clock.elapsedTime;
-  player.update(dt);
+  const active = game.phase === 'running' && player.locked;
+
+  if (active) {
+    player.update(dt);
+    interaction.update(dt);
+    game.update(dt);
+  }
+
   updateFans(fans, dt);
   updateRackLeds(racks, elapsed);
+  hud.setPrompt(active ? interaction.action : null, interaction.progress);
+
+  if (game.phase === 'report' && !reported) {
+    reported = true;
+    document.exitPointerLock();
+    showReport(game.report);
+  }
+
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-
-export { scene, camera, renderer };

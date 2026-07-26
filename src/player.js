@@ -20,6 +20,7 @@ export class Player {
     this.sensitivity = 0.0022;
     this.bob = 0;
     this.stamina = 1;
+    this.speedScale = 1;
     this.onFootstep = null;
 
     this._bind();
@@ -72,7 +73,7 @@ export class Player {
     }
 
     const moving = wish.lengthSq() > 0;
-    const speed = this.sprinting && moving ? SPRINT : WALK;
+    const speed = (this.sprinting && moving ? SPRINT : WALK) * this.speedScale;
     this.stamina = THREE.MathUtils.clamp(
       this.stamina + (this.sprinting && moving ? -dt * 0.22 : dt * 0.3),
       0,

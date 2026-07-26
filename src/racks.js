@@ -73,6 +73,8 @@ export function buildRacks(scene) {
         load: 0.3 + Math.random() * 0.4,
         fault: null, // set by the incident system
       };
+      // tag the whole group so looking at any part of the rack counts
+      group.userData.rack = rack;
       frame.userData.rack = rack;
       racks.push(rack);
     }

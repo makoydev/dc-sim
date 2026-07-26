@@ -39,8 +39,10 @@ export function buildProps(scene) {
   const fans = [];
   const screens = [];
 
-  const add = (station) => {
+  // tagging the root group means any part of a prop is lookable-at
+  const add = (station, root) => {
     station.mesh.userData.station = station;
+    if (root) root.userData.station = station;
     stations.push(station);
     return station;
   };
@@ -97,7 +99,7 @@ export function buildProps(scene) {
       filterHours: Math.round(1200 + Math.random() * 900),
       running: true,
       fans: fans.slice(-2),
-    });
+    }, g);
     screens.push(unit);
     addCollider(12.1, z, 1.1, 2.0);
   });
@@ -127,7 +129,7 @@ export function buildProps(scene) {
       load: 0.35 + Math.random() * 0.25,
       onBattery: false,
       selfTested: false,
-    });
+    }, g);
     screens.push(unit);
     addCollider(-12.2, z, 0.9, 1.05);
   });
@@ -139,7 +141,7 @@ export function buildProps(scene) {
     scene.add(g);
     box(g, 0.8, 1.8, 0.95, 0, 0.9, 0, MAT.darkCase);
     for (let s = 0; s < 3; s++) box(g, 0.72, 0.06, 0.9, 0, 0.5 + s * 0.5, 0.04, MAT.trim);
-    addCollider(-12.3, 1.1 + i * 1.0, 0.95, 0.8);
+    addCollider(-12.3, 1.1 + i * 1.0, 0.8, 0.95);
   }
 
   // ---- Power distribution panels ------------------------------------------
@@ -162,7 +164,7 @@ export function buildProps(scene) {
       mesh: door,
       breakerTripped: false,
       loadKw: 42 + Math.random() * 20,
-    });
+    }, g);
   });
 
   // ---- NOC desk ------------------------------------------------------------
@@ -204,9 +206,9 @@ export function buildProps(scene) {
       position: new THREE.Vector3(8.6, 1.2, -9.4),
       mesh: g.children[0],
       monitors,
-    });
+    }, g);
     screens.push(station);
-    addCollider(8.6, -9.4, 1.0, 3.0);
+    addCollider(8.6, -9.4, 3.0, 1.0);
     addCollider(8.6, -8.45, 0.6, 0.6);
   }
 
@@ -241,8 +243,8 @@ export function buildProps(scene) {
       label: 'Spares Cage',
       position: new THREE.Vector3(-8.6, 1.2, 9.6),
       mesh: g.children[2],
-    });
-    addCollider(-8.6, 9.6, 0.6, 2.7);
+    }, g);
+    addCollider(-8.6, 9.6, 2.7, 0.6);
   }
 
   // ---- E-waste bin ---------------------------------------------------------
@@ -284,7 +286,7 @@ export function buildProps(scene) {
       mesh: panel,
       screen,
       alarm: false,
-    });
+    }, g);
     screens.push(station);
   }
 
@@ -304,8 +306,8 @@ export function buildProps(scene) {
       label: 'Coffee Machine',
       position: new THREE.Vector3(-11.4, 1.2, -9.6),
       mesh: body,
-    });
-    addCollider(-11.4, -9.6, 0.6, 0.9);
+    }, g);
+    addCollider(-11.4, -9.6, 0.9, 0.6);
   }
 
   return { stations, fans, screens };
