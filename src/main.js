@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { buildHall } from './world.js';
 import { buildRacks, updateRackLeds } from './racks.js';
+import { Player } from './player.js';
 
 const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -17,6 +18,7 @@ camera.position.set(0, 1.7, 6);
 
 buildHall(scene);
 const racks = buildRacks(scene);
+const player = new Player(camera, canvas);
 
 function resize() {
   const w = innerWidth;
@@ -33,6 +35,7 @@ const clock = new THREE.Clock();
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.1);
   const elapsed = clock.elapsedTime;
+  player.update(dt);
   updateRackLeds(racks, elapsed);
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
