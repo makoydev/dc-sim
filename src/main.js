@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { buildHall } from './world.js';
+import { buildRacks, updateRackLeds } from './racks.js';
 
 const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -15,6 +16,7 @@ const camera = new THREE.PerspectiveCamera(72, 1, 0.1, 200);
 camera.position.set(0, 1.7, 6);
 
 buildHall(scene);
+const racks = buildRacks(scene);
 
 function resize() {
   const w = innerWidth;
@@ -30,6 +32,8 @@ const clock = new THREE.Clock();
 
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.1);
+  const elapsed = clock.elapsedTime;
+  updateRackLeds(racks, elapsed);
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
