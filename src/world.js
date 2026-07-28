@@ -61,8 +61,92 @@ export function buildHall(scene) {
   wall(scene, wallMat, t, height, d, maxX + t / 2, height / 2, cz);
 
   buildCeilingRig(scene);
+  buildContainment(scene);
   buildLighting(scene);
   return { floor, ceiling };
+}
+
+/**
+ * The two enclosed cold aisles: roof panels and sliding end doors. Sealing the
+ * cold air is the real-world reason they exist; on nights they are also the one
+ * place the hall feels closed rather than open.
+ */
+export const CONTAINMENT = [
+  { minX: -5.1, maxX: 5.1, minZ: -5.35, maxZ: -2.15 },
+  { minX: -5.1, maxX: 5.1, minZ: 1.25, maxZ: 4.45 },
+];
+
+function buildContainment(scene) {
+  const roofMat = new THREE.MeshStandardMaterial({
+    color: 0x8fb6cf,
+    roughness: 0.1,
+    metalness: 0.1,
+    transparent: true,
+    opacity: 0.16,
+    side: THREE.DoubleSide,
+  });
+  const frameMat = new THREE.MeshStandardMaterial({
+    color: 0x39434e,
+    roughness: 0.4,
+    metalness: 0.8,
+  });
+  const doorMat = new THREE.MeshStandardMaterial({
+    color: 0xa8c8dd,
+    roughness: 0.08,
+    metalness: 0.1,
+    transparent: true,
+    opacity: 0.22,
+    side: THREE.DoubleSide,
+  });
+
+  for (const zone of CONTAINMENT) {
+    const width = zone.maxX - zone.minX;
+    const depth = zone.maxZ - zone.minZ;
+    const cx = (zone.minX + zone.maxX) / 2;
+    const cz = (zone.minZ + zone.maxZ) / 2;
+    const top = 2.32;
+
+    const roof = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), roofMat);
+    roof.rotation.x = Math.PI / 2;
+    roof.position.set(cx, top, cz);
+    scene.add(roof);
+
+    // frame rails along both rack tops
+    for (const z of [zone.minZ, zone.maxZ]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(width, 0.07, 0.07), frameMat);
+      rail.position.set(cx, top, z);
+      scene.add(rail);
+    }
+    // cross members, so the roof reads as panels rather than a sheet
+    for (let x = zone.minX; x <= zone.maxX + 0.01; x += width / 6) {
+      const strut = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, depth), frameMat);
+      strut.position.set(x, top, cz);
+      scene.add(strut);
+    }
+    // end doors — you can walk through them, the entity will not
+    for (const x of [zone.minX, zone.maxX]) {
+      const door = new THREE.Mesh(new THREE.PlaneGeometry(depth, top), doorMat);
+      door.rotation.y = Math.PI / 2;
+      door.position.set(x, top / 2, cz);
+      scene.add(door);
+
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, top, 0.08), frameMat);
+      post.position.set(x, top / 2, zone.minZ);
+      scene.add(post);
+      const post2 = post.clone();
+      post2.position.z = zone.maxZ;
+      scene.add(post2);
+    }
+  }
+}
+
+/** True when a point is inside a sealed cold aisle. */
+export function inContainment(position) {
+  return CONTAINMENT.some(
+    (z) =>
+      position.x > z.minX && position.x < z.maxX &&
+      position.z > z.minZ && position.z < z.maxZ,
+  );
 }
 
 const LIGHT_COLS = 5;
