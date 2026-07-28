@@ -1,5 +1,8 @@
 # Uptime — Data Center Engineer Sim
 
+**Play it: https://makoydev.github.io/dc-sim/** — desktop only (it needs a
+keyboard and pointer lock). Runs entirely in the browser; nothing to install.
+
 A small 3D browser game about working a shift on the data hall floor: walk the
 aisles, work your checklist, and keep the racks alive until end of shift.
 

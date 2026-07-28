@@ -76,10 +76,15 @@ function beginShift(mode) {
   canvas.requestPointerLock();
 }
 
+// pointer lock and WASD need a real keyboard and mouse; say so up front
+// rather than letting a phone load 2 MB and then do nothing
+const touchOnly = matchMedia('(pointer: coarse)').matches;
+
 function showBriefing() {
   hud.showOverlay(
     `<h1>Uptime</h1>
      <h2>Data hall 3 &middot; pick your shift</h2>
+     ${touchOnly ? '<p class="bad">This one needs a keyboard and mouse — open it on a laptop or desktop.</p>' : ''}
      <p>You are the engineer on the floor. Work the checklist, answer the tickets
      that page you during the shift, and keep the SLA above 99.9%.</p>
      <p class="dim">Failed drives, clogged filters and tripped breakers all cost
