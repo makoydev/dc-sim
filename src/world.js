@@ -149,8 +149,11 @@ export function inContainment(position) {
   );
 }
 
-const LIGHT_COLS = 5;
-const LIGHT_ROWS = 4;
+// fewer, stronger fittings: every punctual light is evaluated per fragment, so
+// this count is the single most expensive number in the project.
+// `npm run lights` checks the hall is still evenly lit after changing it.
+const LIGHT_COLS = 4;
+const LIGHT_ROWS = 3;
 const LIGHT_INSET = 2.2; // how close the outermost fixtures sit to the walls
 
 /**
@@ -220,11 +223,11 @@ function buildCeilingRig(scene) {
 export const LIGHTING = {
   ambient: 1.3,
   hemisphere: 0.8,
-  troffer: { intensity: 15, range: 18, height: HALL.height - 0.9 },
+  troffer: { intensity: 26, range: 24, height: HALL.height - 0.9 },
   // wall wash down the two equipment walls, where the CRACs, UPS bank and
   // panels live — these are work surfaces and need to be readable. Kept a
   // couple of metres off the faces so they light them rather than blow them out.
-  wash: { intensity: 6, range: 9, height: 2.4, inset: 2.4, rows: [-6, 0, 6] },
+  wash: { intensity: 9, range: 11, height: 2.4, inset: 2.4, rows: [-4.5, 4.5] },
 };
 
 /** Every punctual light in the hall, as plain data — see tools/light-check.mjs. */
@@ -321,8 +324,8 @@ function buildEmergencyLighting(scene) {
 export function setLightingMode(mode) {
   const night = mode === 'night';
 
-  for (const light of rig.troffers) light.intensity = night ? 0 : LIGHTING.troffer.intensity;
-  for (const light of rig.washes) light.intensity = night ? 0 : LIGHTING.wash.intensity;
+  for (const light of rig.troffers) light.visible = !night;
+  for (const light of rig.washes) light.visible = !night;
   rig.ambient.intensity = night ? 0.22 : LIGHTING.ambient;
   rig.hemisphere.intensity = night ? 0.14 : LIGHTING.hemisphere;
   rig.ambient.color.set(night ? 0x1b2a3a : 0x2b3947);
@@ -331,7 +334,8 @@ export function setLightingMode(mode) {
   // `base` is the level effects restore to, so two overlapping flickers can
   // never leave a fitting dead
   for (const entry of rig.emergency) {
-    entry.base = night ? 3.2 : 0;
+    entry.base = night ? 3.4 : 0;
+    entry.lamp.visible = night;
     entry.lamp.intensity = entry.base;
     entry.bulb.material.color.set(night ? 0xffb26b : 0x2a2018);
   }
