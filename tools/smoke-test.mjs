@@ -252,4 +252,82 @@ const { Torch } = await import('../src/torch.js');
   console.log(`night shift OK · ${events.length} presence events, torch drains and recovers`);
 }
 
+// ---- the entity ------------------------------------------------------------
+
+const { Entity } = await import('../src/entity.js');
+const { inContainment } = await import('../src/world.js');
+
+{
+  const entity = new Entity({ scene, player, racks, hud, audio: null });
+
+  // the graph must connect every aisle, or it will get stranded in one
+  const reachable = new Set([0]);
+  const queue = [entity.nodes[0]];
+  while (queue.length) {
+    const node = queue.shift();
+    for (const id of node.links) {
+      if (reachable.has(id) || entity.nodes[id].contained) continue;
+      reachable.add(id);
+      queue.push(entity.nodes[id]);
+    }
+  }
+  const open = entity.nodes.filter((n) => !n.contained).length;
+  if (reachable.size < open) {
+    fail(`nav graph is not connected: ${reachable.size}/${open} nodes reachable`);
+  }
+  if (!entity.nodes.some((n) => n.contained)) fail('no nav nodes fall inside containment');
+
+  // it should hunt a noisy player down and catch them
+  let caught = 0;
+  entity.onCatch = () => { caught++; };
+  entity.spawn();
+  player.position.set(0, 1.68, -9.8);
+  for (let i = 0; i < 90 * 30; i++) {
+    entity.update(1 / 30);
+    if (i % 15 === 0) entity.hear(0.8, player.position.clone());
+    if (caught) break;
+  }
+  if (!caught) fail('the entity never caught a player standing still and shouting');
+  console.log(`entity OK · caught a noisy stationary player in the open`);
+
+  // and it must never enter containment, however loud you are in there
+  const safe = { x: 0, z: -3.7 };
+  player.position.set(safe.x, 1.68, safe.z);
+  if (!inContainment(player.position)) fail('the safe test spot is not inside containment');
+  caught = 0;
+  entity.spawn();
+  let intrusions = 0;
+  for (let i = 0; i < 120 * 30; i++) {
+    entity.update(1 / 30);
+    if (i % 10 === 0) entity.hear(1, player.position.clone());
+    if (inContainment(entity.position)) intrusions++;
+  }
+  if (intrusions) fail(`the entity walked into containment ${intrusions} times`);
+  if (caught) fail('the entity caught a player standing inside containment');
+  console.log('containment OK · it will not come in, however loud you are');
+
+  // masking: the same noise must carry further with the cooling down
+  const cracs = stations.filter((s) => s.kind === 'crac');
+  game._humLevel = 1;
+  const quietMask = game.masking;
+  game._humLevel = 0;
+  const loudMask = game.masking;
+  if (!(loudMask < quietMask)) fail('losing cooling did not make the hall more revealing');
+  console.log(`masking OK · ${quietMask.toFixed(2)} with fans, ${loudMask.toFixed(2)} without`);
+
+  // being caught costs an hour and heat, and does not end the shift
+  game.phase = 'running';
+  game.mode = 'night';
+  const before = { time: game.time, temp: racks[0].temp, caught: game.stats.caught };
+  game.playerCaught();
+  if (game.phase !== 'caught') fail('being caught did not enter the come-to phase');
+  if (game.time <= before.time) fail('being caught cost no time');
+  if (racks[0].temp <= before.temp) fail('being caught did not heat the hall');
+  game.resumeAfterCatch();
+  if (game.phase !== 'running') fail('the shift did not resume after a catch');
+  if (game.stats.caught !== before.caught + 1) fail('the catch was not counted');
+  if (cracs.length && game.entityGraceUntil <= game.time) fail('no grace period after a catch');
+  console.log('catch OK · costs an hour and heat, shift continues');
+}
+
 console.log('smoke test OK');
