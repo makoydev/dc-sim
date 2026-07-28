@@ -13,11 +13,12 @@ const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 1.14;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x05070a);
-scene.fog = new THREE.Fog(0x05070a, 18, 60);
+// haze rather than blackness — the old fog started eating the far corners
+scene.fog = new THREE.Fog(0x0a121a, 26, 80);
 
 const camera = new THREE.PerspectiveCamera(72, 1, 0.1, 200);
 camera.position.set(0, 1.7, 6);

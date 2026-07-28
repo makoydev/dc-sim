@@ -65,9 +65,34 @@ export function buildHall(scene) {
   return { floor, ceiling };
 }
 
+const LIGHT_COLS = 5;
+const LIGHT_ROWS = 4;
+const LIGHT_INSET = 2.2; // how close the outermost fixtures sit to the walls
+
+/**
+ * Fixture grid, spread evenly wall to wall. A fixed step used to leave a 6 m
+ * gap in front of the CRAC wall, which is why the east side read as a cave.
+ */
+export function fixtureGrid() {
+  const { minX, maxX, minZ, maxZ } = HALL;
+  const spots = [];
+  for (let r = 0; r < LIGHT_ROWS; r++) {
+    const z = THREE.MathUtils.lerp(
+      minZ + LIGHT_INSET, maxZ - LIGHT_INSET, r / (LIGHT_ROWS - 1),
+    );
+    for (let c = 0; c < LIGHT_COLS; c++) {
+      const x = THREE.MathUtils.lerp(
+        minX + LIGHT_INSET, maxX - LIGHT_INSET, c / (LIGHT_COLS - 1),
+      );
+      spots.push({ x, z });
+    }
+  }
+  return spots;
+}
+
 /** Cable trays and the light troffers that hang off them. */
 function buildCeilingRig(scene) {
-  const { minX, maxX, minZ, maxZ, height } = HALL;
+  const { minX, maxX, height } = HALL;
   const trayMat = new THREE.MeshStandardMaterial({
     color: 0x2a3138,
     roughness: 0.6,
@@ -76,36 +101,69 @@ function buildCeilingRig(scene) {
   const lampMat = new THREE.MeshStandardMaterial({
     color: 0x0e141a,
     emissive: 0xcfe6ff,
-    emissiveIntensity: 1.6,
+    emissiveIntensity: 2.1,
     roughness: 0.4,
   });
+  const trayGeo = new THREE.BoxGeometry(maxX - minX - 1, 0.14, 0.5);
+  const lampGeo = new THREE.BoxGeometry(2.4, 0.08, 0.4);
 
-  for (let z = minZ + 3; z <= maxZ - 3; z += 4.8) {
-    const tray = new THREE.Mesh(
-      new THREE.BoxGeometry(maxX - minX - 1, 0.14, 0.5),
-      trayMat,
-    );
+  const spots = fixtureGrid();
+  const rows = [...new Set(spots.map((s) => s.z))];
+  for (const z of rows) {
+    const tray = new THREE.Mesh(trayGeo, trayMat);
     tray.position.set((minX + maxX) / 2, height - 0.35, z);
     scene.add(tray);
-
-    for (let x = minX + 3; x <= maxX - 3; x += 5.2) {
-      const lamp = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.08, 0.36), lampMat);
-      lamp.position.set(x, height - 0.6, z + 0.8);
-      scene.add(lamp);
-    }
+  }
+  for (const spot of spots) {
+    const lamp = new THREE.Mesh(lampGeo, lampMat);
+    lamp.position.set(spot.x, height - 0.6, spot.z);
+    scene.add(lamp);
   }
 }
 
-function buildLighting(scene) {
-  const { minX, maxX, minZ, maxZ, height } = HALL;
-  scene.add(new THREE.HemisphereLight(0x9fc4e8, 0x0b1116, 0.55));
-  scene.add(new THREE.AmbientLight(0x24303c, 1.0));
+export const LIGHTING = {
+  ambient: 1.3,
+  hemisphere: 0.8,
+  troffer: { intensity: 15, range: 18, height: HALL.height - 0.9 },
+  // wall wash down the two equipment walls, where the CRACs, UPS bank and
+  // panels live — these are work surfaces and need to be readable. Kept a
+  // couple of metres off the faces so they light them rather than blow them out.
+  wash: { intensity: 6, range: 9, height: 2.4, inset: 2.4, rows: [-6, 0, 6] },
+};
 
-  for (let z = minZ + 3; z <= maxZ - 3; z += 4.8) {
-    for (let x = minX + 3; x <= maxX - 3; x += 5.2) {
-      const light = new THREE.PointLight(0xbfe0ff, 12, 14, 2);
-      light.position.set(x, height - 0.9, z + 0.8);
-      scene.add(light);
+/** Every punctual light in the hall, as plain data — see tools/light-check.mjs. */
+export function lightPlan() {
+  const lights = fixtureGrid().map((spot) => ({
+    x: spot.x,
+    y: LIGHTING.troffer.height,
+    z: spot.z,
+    intensity: LIGHTING.troffer.intensity,
+    range: LIGHTING.troffer.range,
+  }));
+  for (const x of [HALL.minX + LIGHTING.wash.inset, HALL.maxX - LIGHTING.wash.inset]) {
+    for (const z of LIGHTING.wash.rows) {
+      lights.push({
+        x,
+        y: LIGHTING.wash.height,
+        z,
+        intensity: LIGHTING.wash.intensity,
+        range: LIGHTING.wash.range,
+      });
     }
+  }
+  return lights;
+}
+
+function buildLighting(scene) {
+  scene.add(new THREE.HemisphereLight(0xa8ccef, 0x121a22, LIGHTING.hemisphere));
+  scene.add(new THREE.AmbientLight(0x2b3947, LIGHTING.ambient));
+
+  for (const spec of lightPlan()) {
+    const isWash = spec.y === LIGHTING.wash.height;
+    const light = new THREE.PointLight(
+      isWash ? 0x9fc4e8 : 0xbfe0ff, spec.intensity, spec.range, 2,
+    );
+    light.position.set(spec.x, spec.y, spec.z);
+    scene.add(light);
   }
 }
