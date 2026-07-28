@@ -77,6 +77,7 @@ const noop = () => {};
 const hud = {
   say: noop, setStatus: noop, setChecklist: noop, setAlerts: noop,
   setCarry: noop, setStamina: noop, setMarker: noop, setPrompt: noop,
+  setTorch: noop,
 };
 
 const scene = new THREE.Scene();
@@ -202,4 +203,53 @@ if (game.tasks.length < 6) fail('no incidents were rolled during the shift');
 if (racks.some((r) => Number.isNaN(r.temp))) fail('rack temperature went NaN');
 if (Number.isNaN(report.uptime)) fail('uptime went NaN');
 console.log(`distinct prompts seen: ${seenLabels.size}`);
+
+// ---- night shift -----------------------------------------------------------
+
+const { setLightingMode, rig } = await import('../src/world.js');
+const { Presence } = await import('../src/presence.js');
+const { Torch } = await import('../src/torch.js');
+
+{
+  setLightingMode('night');
+  if (rig.troffers.some((l) => l.intensity > 0)) fail('ceiling grid still lit at night');
+  if (!rig.emergency.every(({ lamp }) => lamp.intensity > 0)) fail('emergency lighting is dark');
+
+  const torch = new Torch(camera, scene);
+  torch.toggle();
+  if (!torch.on) fail('torch would not switch on');
+  for (let i = 0; i < 600; i++) torch.update(1, 2);
+  if (torch.battery !== 0 || torch.on) fail('torch battery never ran out');
+  if (!Number.isFinite(torch.light.intensity)) fail('torch intensity went NaN');
+
+  // fire every director event many times over, at every dread level
+  const presence = new Presence({ camera, player, racks, hud, audio: null });
+  const fired = new Set();
+  const events = ['flicker', 'clang', 'creak', 'footsteps', 'ledWave', 'doorSlam',
+    'phantomFault', 'whisper', 'blackout'];
+  for (const name of events) {
+    presence[name]();
+    fired.add(name);
+    for (let i = 0; i < 200; i++) {
+      player.position.set(Math.sin(i) * 6, 1.68, Math.cos(i) * 6);
+      player.velocity.set(1, 0, 1);
+      presence.update(1 / 30, i / 200);
+    }
+  }
+  if (fired.size !== events.length) fail('not every presence event ran');
+  if (presence.effects.length > 4) fail('presence effects are leaking');
+  if (racks.some((r) => r.ledOverride)) fail('an LED wave left racks overridden');
+  if (rig.emergency.some(({ lamp }) => !Number.isFinite(lamp.intensity))) {
+    fail('an event left emergency lighting NaN');
+  }
+  // overlapping flickers and blackouts must not strand a fitting dead
+  if (rig.emergency.some((e) => e.lamp.intensity !== e.base)) {
+    fail('an emergency fitting was left off after its effect ended');
+  }
+
+  setLightingMode('day');
+  if (rig.troffers.some((l) => l.intensity === 0)) fail('day lighting did not come back');
+  console.log(`night shift OK · ${events.length} presence events, torch drains and recovers`);
+}
+
 console.log('smoke test OK');
