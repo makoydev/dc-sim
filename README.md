@@ -47,6 +47,8 @@ src/racks.js        rack rows and status LEDs
 src/props.js        CRACs, UPS bank, PDUs, NOC desk, spares, coffee
 src/player.js       first-person controller and AABB collision
 src/interaction.js  centre-screen raycast, hold-to-act
+src/pickables.js    the mesh list the crosshair is allowed to test
+src/highlight.js    focus brackets around the object under the crosshair
 src/game.js         shift clock, thermals, incidents, scoring, dashboards
 src/tasks.js        checklist definitions and incident rolls
 src/ui.js           HUD
@@ -63,9 +65,10 @@ vendor/three/       pinned three.js build, so there is no build step
 npm test
 ```
 
-Builds the entire hall under a stubbed DOM — no WebGL, no browser — plays a
-whole shift, fires every reachable interaction, and asserts the result is sane.
-It catches logic errors, not rendering ones.
+Builds the entire hall under a stubbed DOM — no WebGL, no browser — checks that
+the crosshair picks the right hardware (and refuses to pick through walls),
+plays a whole shift, fires every reachable interaction, and asserts the result
+is sane. It catches logic errors, not rendering ones.
 
 ## What's next
 

@@ -9,14 +9,28 @@ Effort is a rough estimate for one person:
 
 ---
 
+## Shipped
+
+- **1.1 Focus brackets.** Corner brackets now draw around whatever the
+  crosshair resolves to, cyan when you can act and amber when something is
+  blocking you, so the hall reads as touchable before a prompt appears.
+  (`highlight.js`)
+- **1.2 Pickable list.** The interaction raycast tested every mesh in the scene
+  each frame; it now tests a registered list of 95 meshes out of 620 scene
+  objects. Props carry one invisible hitbox covering their whole footprint, so
+  looking anywhere on a CRAC — grille, display, fan — picks the unit.
+  (`pickables.js`, `interaction.js`)
+
+---
+
 ## 1. Known rough edges
 
-These are the things I would fix before adding anything new.
+These are the things I would fix before adding anything new. Numbering is
+stable: shipped items move to the section above and their numbers are not
+reused.
 
 | # | Issue | Where | Effort |
 | --- | --- | --- | --- |
-| 1.1 | Nothing highlights when you look at it — you only learn a thing is interactive from the prompt text. An emissive outline or rim-light on the focused object would make the hall read as touchable. | `interaction.js` (`_pick` already returns the target), `racks.js` | S |
-| 1.2 | The interaction raycast tests **every** mesh in the scene each frame (`intersectObjects(scene.children, true)`). Keep a flat array of interactive meshes and raycast only that. | `interaction.js:_pick` | S |
 | 1.3 | No shadows at all, so racks feel like they float. One shadow-casting light per aisle, or a cheap baked contact-shadow decal under each cabinet, adds a lot of grounding for very little. | `world.js:buildLighting` | M |
 | 1.4 | Tuning constants are scattered across modules (`SHIFT_SECONDS`, `INCIDENT_GAP` in `game.js`; `WALK`/`SPRINT`/`EYE` in `player.js`; `RANGE` in `interaction.js`). Pull them into one `config.js` so difficulty can be tuned — and eventually chosen by the player — in one place. | new `src/config.js` | S |
 | 1.5 | Incidents use bare `Math.random()`, so no two shifts can be compared and the smoke test is non-deterministic. A seeded PRNG gives reproducible runs, regression tests, and shareable "shift seeds". | `tasks.js:rollIncident`, `game.js` | S |
@@ -206,7 +220,11 @@ report. It is a smoke test, not a suite.
 
 ## Good first tasks
 
-If someone new wants to pick this up: **1.1** (highlight what you are looking
-at), **5.1** (positional CRAC audio), **1.4** (central config), and **6.3**
-(colour-blind safe status) are all small, self-contained, and each makes the
-game noticeably better on its own.
+If someone new wants to pick this up: **5.1** (positional CRAC audio), **1.4**
+(central config), **6.3** (colour-blind safe status) and **1.8** (pause on
+blur) are all small, self-contained, and each makes the game noticeably better
+on its own.
+
+Next up, in order: positional audio, then central config plus a seeded RNG so
+balance is measurable, then the data-driven task refactor in section 7 before
+any new incident types are added.
