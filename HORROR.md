@@ -58,9 +58,58 @@ lasts the whole shift.
   power means walking toward it. Your job description is the bait.
 - **Cold aisle containment is safe.** The one place it will not follow, which
   finally gives the aisle layout tactical meaning.
+- **You can get inside things.** Two storage cabinets and two workbenches. It
+  cannot reach you in there and you make no sound while you are still — but the
+  door makes a noise on the way in, so hiding at the last second buys nothing.
 
 No weapons. Hide and run only. The moment the player can fight back, the hall
 stops being frightening.
+
+---
+
+## 3a. What it looks like
+
+Proportions do the work, not gore. Two and a half metres of it, shoulders
+narrower than a person's, forearms hanging past the knees, knees that bend
+backwards like a bird's, a skull stretched vertically with no face on it. The
+only bright thing is two small glints where the torch catches — they warm and
+pulse when it is hunting.
+
+Two rules learned by getting it wrong:
+
+- **It must not slide.** The first version was a static figure translating along
+  the floor and it read as a bug, not a threat. A procedural walk — legs
+  alternating, arms counter-swinging, hips rising slightly on each step, the
+  head never quite level — did more for the fear than any amount of geometry.
+- **Slightly glossy beats matte black.** At roughness 1 it vanished into the
+  dark completely, which sounds right and plays wrong: you never got the moment
+  where the torch finds an edge of something before you understand the shape.
+
+It also leans forward when it changes to a chase, which is readable from across
+the hall and is usually the last thing you want to see.
+
+---
+
+## 3b. What it sounds like
+
+Sound carries this mode more than the model does.
+
+- **Arrival.** A three-second layered drop when it enters the hall: sawtooth
+  partials sliding two octaves down, a filter closing from 2.6 kHz to 220 Hz, a
+  metallic band of noise dragged down with them, and a 41 Hz sine underneath.
+- **The chase layer.** A sustained tremolo cluster (73.4 / 77.8 / 146.8 Hz —
+  deliberately dissonant) that starts the moment it commits to a chase and only
+  stops when it loses you. Intensity tracks distance: the filter opens from 240
+  to 1140 Hz and the tremolo speeds from 2.6 to 8 Hz as it closes.
+- **Heartbeat.** Once it is within nine metres and not merely patrolling, your
+  own pulse takes over, from 1.15 s between beats down to 0.42 s.
+- **The catch.** The chase layer cuts dead, then a bandpass scream swept down
+  from 2.6 kHz over a dissonant pair of sawtooths.
+- **Muffling.** Everything runs through a lowpass that drops to 480 Hz while you
+  are hidden, so the hall goes dull and close and you cannot hear it as well
+  either. Hiding costs you information.
+
+All of it is still synthesised. There are no audio files in this project.
 
 ---
 
@@ -136,11 +185,29 @@ Deliberately back to front. Step 3 before step 4 is the whole trick.
       faults, radio
 - [x] 4 — the entity: blind, sound-driven, walks the aisle graph, will not
       enter containment, kills cooling to make you audible
+- [x] 4a — hiding places, muffled audio, and a look-arc while you are in them
 - [ ] 5 — the partner
 
 ---
 
-## 9. Notes from building it
+## 9. Hiding
+
+Four spots: storage cabinets on the west wall and in the south-east corner
+(you get inside), workbenches north-west and east (you get under).
+
+While hidden you are frozen in place, your view is clamped to an arc — 0.75
+radians in a cabinet, 1.0 under a bench — the screen closes to a slot, and the
+audio muffles. You make no noise at all, so the entity loses you within seven
+seconds and goes back to investigating. Getting in and out each emits 0.34
+noise at the spot, which is the whole balance: hiding early is free, hiding as
+it rounds the corner tells it exactly where you went.
+
+Nothing stops the shift clock while you are in there, and the racks keep
+heating. That is deliberate — see §2.
+
+---
+
+## 10. Notes from building it
 
 - **Distance is planar.** It walks the floor; the player's position is eye
   height. Comparing full 3D distance meant it could never physically reach
@@ -155,7 +222,7 @@ Deliberately back to front. Step 3 before step 4 is the whole trick.
 
 ---
 
-## 10. Later
+## 11. Later
 
 - **Co-op.** Two engineers, one ticket queue, one radio. The obvious end state,
   and the reason to keep the sim honest.

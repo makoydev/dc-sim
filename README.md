@@ -25,14 +25,16 @@ The game needs to be served over HTTP (ES modules + import maps); opening
 | `Shift` | Sprint |
 | `E` | Interact |
 | `F` | Torch (night shift) |
+| `E` | Hide in a cabinet or under a bench (night), `E` again to come out |
 | `Tab` | Toggle checklist |
 | `Esc` | Release pointer |
 
 ## Two shifts
 
 **Day** is the working hall described below. **Night** is the same hall at
-22:00 on emergency lighting, worked by torch, with something that may or may
-not be on the floor with you — see [HORROR.md](./HORROR.md).
+22:00 on emergency lighting, worked by torch, with something on the floor that
+hunts by sound. The fans cover you while they are running; a cold aisle or a
+cabinet will hide you. See [HORROR.md](./HORROR.md).
 
 ## The shift
 
