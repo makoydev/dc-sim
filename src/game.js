@@ -175,12 +175,20 @@ export class Game {
   _updateEntity(dt) {
     if (!this.entity) return;
     if (this.time < this.entityGraceUntil) return; // it lets you get up
-    if (this.entity.state === 'dormant' && this.progress > 0.22) {
+    if (this.entity.state === 'dormant' && this.progress > 0.075) {
       this.entity.spawn();
       this.hud.say('Somewhere down the hall, a door you did not open.', 'bad');
     }
     this.entity.update(dt);
     this.noise = Math.max(0, this.noise - dt * 1.6);
+
+    // breathing. quiet, but it means standing still is not the same as being
+    // absent — close enough and it finds you anyway
+    this.breathAcc = (this.breathAcc ?? 0) + dt;
+    if (this.breathAcc > 1.3) {
+      this.breathAcc = 0;
+      this.emitNoise(this.player.sprinting ? 0.22 : 0.1);
+    }
   }
 
   /**

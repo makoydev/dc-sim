@@ -22,6 +22,9 @@ const SPEED = { patrol: 1.35, investigate: 1.9, chase: 2.9 };
 const planar = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 const CATCH_RANGE = 1.15;
 const LOSE_AFTER = 7; // seconds without a noise before it gives up a chase
+// once it is this close it has you, and holding still will not save you
+const LOCK_RANGE = 9;
+const RELOCK_EVERY = 0.4;
 
 function buildGraph() {
   const nodes = [];
@@ -224,12 +227,19 @@ export class Entity {
           b.pos.distanceToSquared(this.player.position) -
           a.pos.distanceToSquared(this.player.position),
       )[0];
-    this.position.copy(far.pos);
+    this.teleport(far.pos);
     this.group.visible = true;
     this.state = 'patrol';
-    this.nextNode = far;
     this._repath(this._randomNode().pos);
     this.audio?.arrival();
+  }
+
+  /** Put it somewhere directly, discarding any path it was part way along. */
+  teleport(position) {
+    this.position.set(position.x, 0, position.z);
+    this.path = [];
+    this.nextNode = this._nearestNode(this.position);
+    this.group.position.copy(this.position);
   }
 
   despawn() {
@@ -325,6 +335,7 @@ export class Entity {
 
     this.sinceHeard += dt;
     this.sabotageCooldown -= dt;
+    this._lockOn(dt);
 
     if (this.state === 'chase' && this.sinceHeard > LOSE_AFTER) {
       this.state = 'investigate';
@@ -335,11 +346,44 @@ export class Entity {
       this.state = 'patrol';
       this._repath(this._randomNode().pos);
     }
+    // an investigation is a search, not a walk to a spot and a stand
+    if (this.state === 'investigate' && !this.path.length) this._searchNear(this.lastNoise);
 
     this._advance(dt);
     this._pressure(dt);
     this._pulse(dt);
     this._check();
+  }
+
+  /**
+   * Close range is not a hearing problem. Once it is within `LOCK_RANGE` it
+   * knows where you are and keeps coming — standing still only works at a
+   * distance. Containment and cabinets still break it, because those are
+   * physical, not quiet.
+   */
+  _lockOn(dt) {
+    if (this.state !== 'chase') return;
+    if (this.isPlayerHidden?.()) return;
+    if (inContainment(this.player.position)) return;
+    if (planar(this.position, this.player.position) > LOCK_RANGE) return;
+
+    this.sinceHeard = 0;
+    this.sinceRelock = (this.sinceRelock ?? 0) + dt;
+    if (this.sinceRelock < RELOCK_EVERY) return;
+    this.sinceRelock = 0;
+    this.lastNoise.copy(this.player.position);
+    this._repath(this.player.position);
+  }
+
+  /** Casts around near the last thing it heard instead of standing over it. */
+  _searchNear(origin) {
+    const near = this.nodes.filter(
+      (n) => !n.contained && planar(n.pos, origin) < 6.5,
+    );
+    const pick = near.length
+      ? near[Math.floor(Math.random() * near.length)]
+      : this._randomNode();
+    this._repath(pick.pos);
   }
 
   /**
@@ -422,11 +466,8 @@ export class Entity {
     // it cannot find you in a cabinet, but it can wait outside one
     if (this.isPlayerHidden?.()) return;
 
-    if (inContainment(this.player.position)) {
-      // it will not come in. it waits.
-      if (this.state === 'chase' && distance < 6) this.sinceHeard = 0;
-      return;
-    }
+    // it will not come in. it loses you slowly, and searches the ends.
+    if (inContainment(this.player.position)) return;
     if (distance < CATCH_RANGE) {
       this.audio?.caught();
       this.onCatch?.();
