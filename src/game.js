@@ -55,6 +55,8 @@ export class Game {
     this.handoverAdded = false;
     this._screenAcc = 0;
     this._humLevel = 1;
+    this._look = new THREE.Vector3();
+    this._toScreen = new THREE.Vector3();
 
     // each rack is cooled by whichever CRAC sits closest along the hall
     for (const rack of this.racks) {
@@ -763,9 +765,22 @@ export class Game {
     return left < 30 ? 'bad' : left < 75 ? 'warn' : 'dim';
   }
 
+  /**
+   * Repainting a canvas texture means a full re-upload, so only do it for
+   * displays the player could actually be reading.
+   */
+  _screenWorthPainting(position) {
+    const distance = position.distanceTo(this.player.position);
+    if (distance > 14) return false;
+    if (distance < 3) return true; // right on top of it, never mind facing
+    this.camera.getWorldDirection(this._look);
+    this._toScreen.copy(position).sub(this.player.position).normalize();
+    return this._look.dot(this._toScreen) > 0.1;
+  }
+
   _updateScreens(dt) {
     this._screenAcc += dt;
-    if (this._screenAcc < 0.25) return;
+    if (this._screenAcc < 0.4) return;
     const step = this._screenAcc;
     this._screenAcc = 0;
 
@@ -774,6 +789,7 @@ export class Game {
       crac.supply += ((crac.running ? 16.5 + (1 - cooling) * 6 : 26) - crac.supply) * 0.15;
       crac.ret += ((this.hallTemp + 5.5) - crac.ret) * 0.12;
       crac.filterHours += step * 3;
+      if (!this._screenWorthPainting(crac.position)) continue;
       crac.screen.paint((g, w, h) => {
         Screen.bg(g, w, h, crac.running ? '#06121a' : '#1c0a08');
         Screen.text(g, crac.label, 12, 30, 22, '#4cc2ff');
@@ -791,6 +807,7 @@ export class Game {
       ups.charge = THREE.MathUtils.clamp(
         ups.charge + (ups.onBattery ? -step * 0.006 : step * 0.002), 0, 1,
       );
+      if (!this._screenWorthPainting(ups.position)) continue;
       ups.screen.paint((g, w, h) => {
         Screen.bg(g, w, h, ups.onBattery ? '#1c1406' : '#06121a');
         Screen.text(g, ups.label, 12, 28, 20, '#4cc2ff');
@@ -803,14 +820,14 @@ export class Game {
     }
 
     const vesda = this.stations.find((s) => s.kind === 'fire');
-    vesda.screen.paint((g, w, h) => {
+    if (this._screenWorthPainting(vesda.position)) vesda.screen.paint((g, w, h) => {
       Screen.bg(g, w, h, '#12060a');
       Screen.text(g, 'VESDA', 12, 30, 20, '#ff8a8a');
       Screen.text(g, 'ALL ZONES NORMAL', 12, 56, 15, '#46d39a');
       Screen.text(g, `SMOKE 0.003%/m`, 12, h - 12, 14, '#7d93a6');
     });
 
-    this._paintNoc();
+    if (this._screenWorthPainting(this.noc.position)) this._paintNoc();
   }
 
   _paintNoc() {
