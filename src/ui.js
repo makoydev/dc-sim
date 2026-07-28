@@ -32,6 +32,7 @@ export class HUD {
       <div id="carry" class="panel">
         <div class="item dim">Hands free</div>
         <div class="torch dim" hidden>Torch off</div>
+        <div id="noise" hidden><span>noise</span><div class="track"><div class="fill"></div></div></div>
         <div id="stamina"><div></div></div>
       </div>
       <div id="marker"><div class="ring"></div><div class="text"></div></div>
@@ -142,6 +143,19 @@ export class HUD {
     const pct = Math.round(torch.battery * 100);
     node.textContent = torch.on ? `Torch ${pct}%` : `Torch off · ${pct}%`;
     node.className = `torch ${!torch.on ? 'dim' : torch.low ? 'bad' : 'warn'}`;
+  }
+
+  /**
+   * How much of the noise you are making is carrying past the fan wall. Null
+   * on the day shift, where nothing is listening.
+   */
+  setNoise(level) {
+    const node = this.q('#noise');
+    node.hidden = level == null;
+    if (level == null) return;
+    const fill = node.querySelector('.fill');
+    fill.style.width = `${Math.round(level * 100)}%`;
+    fill.style.background = level > 0.6 ? 'var(--bad)' : level > 0.3 ? 'var(--warn)' : 'var(--ok)';
   }
 
   setStamina(value) {

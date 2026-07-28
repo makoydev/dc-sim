@@ -188,6 +188,19 @@ export function rollIncident(world, now) {
   }
 }
 
+/** A CRAC that stopped on its own. No page, no ticket number. */
+export function createSabotageTask(crac, dueAt) {
+  return task({
+    kind: 'crac-restart',
+    title: `${crac.label} stopped — restart the unit`,
+    hint: 'It was running a minute ago.',
+    targets: [crac],
+    crac,
+    dueAt,
+    severity: 'critical',
+  });
+}
+
 export const ITEMS = {
   drive: { key: 'drive', label: '2.5" spare drive' },
   cable: { key: 'cable', label: 'LC patch cable' },

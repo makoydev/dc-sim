@@ -10,6 +10,7 @@ import { Audio } from './audio.js';
 import { Game } from './game.js';
 import { Torch } from './torch.js';
 import { Presence } from './presence.js';
+import { Entity } from './entity.js';
 
 const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -34,11 +35,18 @@ const hud = new HUD(document.getElementById('ui'));
 const audio = new Audio();
 const torch = new Torch(camera, scene);
 const presence = new Presence({ camera, player, racks, hud, audio });
-const game = new Game({ scene, camera, player, racks, stations, hud, audio, presence });
+const entity = new Entity({ scene, player, racks, hud, audio });
+const game = new Game({
+  scene, camera, player, racks, stations, hud, audio, presence, entity,
+});
 const interaction = new Interaction(camera, scene, (target) => game.resolveAction(target));
 const highlighter = new Highlighter(scene);
 
-player.onFootstep = (sprinting) => audio.footstep(sprinting);
+player.onFootstep = (sprinting) => {
+  audio.footstep(sprinting);
+  // your own feet are the loudest thing you control
+  game.emitNoise(sprinting ? 1 : 0.42);
+};
 
 function resize() {
   const w = innerWidth;
@@ -96,7 +104,8 @@ function showBriefing() {
        <button id="night" class="ghost">Night shift &middot; 22:00</button>
      </div>
      <p class="dim small">Nights: the hall runs on emergency lighting and you
-     work by torch. Ramos is on the genset walk. He will not be answering.</p>`,
+     work by torch. Sound carries — the fans cover you, while they are running.
+     Ramos is on the genset walk. He will not be answering.</p>`,
     (root) => {
       root.querySelector('#day').addEventListener('click', () => beginShift('day'));
       root.querySelector('#night').addEventListener('click', () => beginShift('night'));
@@ -128,6 +137,9 @@ function showReport(report) {
      ${line('Tickets resolved', report.resolved, 'ok')}
      ${line('SLA breaches', report.missed, report.missed ? 'bad' : 'dim')}
      ${line('Final uptime', `${report.uptime.toFixed(3)}%`, report.uptime > 99.9 ? 'ok' : 'warn')}
+     ${report.mode === 'night'
+       ? line('Hours you cannot account for', report.caught, report.caught ? 'bad' : 'dim')
+       : ''}
      ${line('Score', `${report.score}/100`)}
      <p></p><button id="again">Start another shift</button>`,
     (root) => {
@@ -152,6 +164,9 @@ showBriefing();
 
 const clock = new THREE.Clock();
 let reported = false;
+let workNoise = 0;
+let comeToAt = 0;
+let relockBy = 0;
 
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.1);
@@ -164,6 +179,16 @@ function frame() {
     game.update(dt);
     torch.update(dt, player.velocity.length());
     hud.setTorch(game.mode === 'night' ? torch : null);
+    hud.setNoise(game.mode === 'night' ? game.noise : null);
+
+    // hardware work rattles: holding E is a commitment, not a free action
+    if (interaction.holding && interaction.action && !interaction.action.disabled) {
+      workNoise += dt;
+      if (workNoise > 0.45) {
+        workNoise = 0;
+        game.emitNoise(0.75);
+      }
+    }
   }
 
   updateFans(fans, dt);
@@ -173,6 +198,30 @@ function frame() {
   highlighter.setTarget(focus, interaction.action?.disabled);
   highlighter.update(elapsed);
   hud.setPrompt(active ? interaction.action : null, interaction.progress);
+
+  if (game.phase === 'caught' && !comeToAt) {
+    comeToAt = elapsed + 5;
+    document.exitPointerLock();
+    torch.battery = Math.max(0, torch.battery - 0.25);
+    hud.showOverlay(
+      `<h1 class="bad">&mdash;</h1>
+       <h2>You do not remember the floor coming up</h2>
+       <p class="dim">An hour of the shift is gone. The hall is warmer than you
+       left it, and whatever you were carrying is not in your hands.</p>`,
+    );
+  }
+  if (comeToAt && elapsed > comeToAt) {
+    comeToAt = 0;
+    relockBy = elapsed + 1.2;
+    hud.hideOverlay();
+    game.resumeAfterCatch();
+    canvas.requestPointerLock();
+  }
+  // if the browser refuses the re-lock, fall back to the pause card's button
+  if (relockBy && elapsed > relockBy) {
+    relockBy = 0;
+    if (!player.locked) showPause();
+  }
 
   if (game.phase === 'report' && !reported) {
     reported = true;

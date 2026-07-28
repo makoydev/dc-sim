@@ -5,6 +5,7 @@ import {
   ITEMS,
   createHandoverTask,
   createRoutineTasks,
+  createSabotageTask,
   rollIncident,
 } from './tasks.js';
 
@@ -15,7 +16,7 @@ const SHIFT_HOURS = 12;
 const INCIDENT_GAP = [55, 105];
 
 export class Game {
-  constructor({ scene, camera, player, racks, stations, hud, audio, presence }) {
+  constructor({ scene, camera, player, racks, stations, hud, audio, presence, entity }) {
     this.scene = scene;
     this.camera = camera;
     this.player = player;
@@ -24,7 +25,15 @@ export class Game {
     this.hud = hud;
     this.audio = audio;
     this.presence = presence;
+    this.entity = entity;
     this.mode = 'day';
+    this.noise = 0;
+    this.entityGraceUntil = 0;
+
+    if (entity) {
+      entity.onCatch = () => this.playerCaught();
+      entity.onSabotage = (from) => this.entitySabotage(from);
+    }
 
     this.byKind = (kind) => this.stations.filter((s) => s.kind === kind);
     this.noc = stations.find((s) => s.kind === 'noc');
@@ -38,7 +47,7 @@ export class Game {
     this.caffeine = 0;
     this.hallTemp = 21.5;
     this.tasks = [];
-    this.stats = { resolved: 0, missed: 0, hotMinutes: 0 };
+    this.stats = { resolved: 0, missed: 0, hotMinutes: 0, caught: 0 };
     this.nextIncidentAt = 30;
     this.handoverAdded = false;
     this._screenAcc = 0;
@@ -102,7 +111,10 @@ export class Game {
     this._updateUptime(dt);
     this._updateScreens(dt);
     this._updateHum();
-    if (this.mode === 'night') this.presence?.update(dt, this.progress);
+    if (this.mode === 'night') {
+      this.presence?.update(dt, this.progress);
+      this._updateEntity(dt);
+    }
     this._refreshHud();
 
     if (this.time >= SHIFT_SECONDS) this.endShift('clock');
@@ -153,6 +165,75 @@ export class Game {
     this.hallTemp = sum / this.racks.length;
     this.hotRacks = hot;
     if (hot > 0) this.stats.hotMinutes += dt / 60;
+  }
+
+  // ---- night shift ---------------------------------------------------------
+
+  _updateEntity(dt) {
+    if (!this.entity) return;
+    if (this.time < this.entityGraceUntil) return; // it lets you get up
+    if (this.entity.state === 'dormant' && this.progress > 0.22) {
+      this.entity.spawn();
+      this.hud.say('Somewhere down the hall, a door you did not open.', 'bad');
+    }
+    this.entity.update(dt);
+    this.noise = Math.max(0, this.noise - dt * 1.6);
+  }
+
+  /**
+   * How much of a noise actually carries. A full fan wall swallows most of it;
+   * a hall with the cooling down carries nearly all of it. This is the whole
+   * reason a CRAC failure is frightening rather than just hot.
+   */
+  get masking() {
+    return 0.25 + this._humLevel * 0.55;
+  }
+
+  /** Anything the player does that makes a sound. */
+  emitNoise(loudness, position = this.player.position) {
+    if (this.mode !== 'night' || this.phase !== 'running') return;
+    const carried = loudness * (1 - this.masking);
+    this.noise = Math.min(1, Math.max(this.noise, carried * 1.6));
+    this.entity?.hear(carried, position.clone());
+  }
+
+  /** It reaches up and turns the cooling off, because quiet suits it. */
+  entitySabotage(from) {
+    const crac = this.byKind('crac')
+      .filter((c) => c.running)
+      .sort((a, b) => a.position.distanceTo(from) - b.position.distanceTo(from))[0];
+    if (!crac) return;
+    crac.running = false;
+    this.tasks.push(
+      createSabotageTask(crac, this.time + 200),
+    );
+    this.hud.say(`${crac.label} just stopped. Nobody touched the panel.`, 'bad');
+    this.audio?.stinger();
+  }
+
+  /** §6: you lose an hour, not the session. */
+  playerCaught() {
+    if (this.phase !== 'running') return;
+    this.phase = 'caught';
+    this.stats.caught++;
+    this.audio?.stinger();
+    this.entity?.despawn();
+
+    this.time = Math.min(SHIFT_SECONDS - 1, this.time + SHIFT_SECONDS / 12);
+    this.uptime = Math.max(90, this.uptime - 0.4);
+    for (const rack of this.racks) rack.temp += 2.5;
+    this.carrying = null;
+    this.entityGraceUntil = this.time + 75;
+  }
+
+  /** Called once the come-to overlay has played out. */
+  resumeAfterCatch() {
+    if (this.phase !== 'caught') return;
+    this.phase = 'running';
+    this.player.position.set(0, this.player.position.y, -10);
+    this.player.velocity.set(0, 0, 0);
+    this.noise = 0;
+    this.hud.say('You come to by the door. An hour gone. The hall is warmer.', 'warn');
   }
 
   /**
@@ -735,6 +816,8 @@ export class Game {
       uptime: this.uptime,
       resolved: this.stats.resolved,
       missed: this.stats.missed,
+      caught: this.stats.caught,
+      mode: this.mode,
       clock: this.clockText,
     };
     return this.report;

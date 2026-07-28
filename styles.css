@@ -209,6 +209,26 @@ html, body {
   width: 190px;
   text-align: right;
 }
+#noise {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-top: 5px;
+  color: var(--dim);
+  font-size: 10px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+#noise .track {
+  width: 84px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+  overflow: hidden;
+}
+#noise .fill { height: 100%; width: 0%; background: var(--ok); transition: width 0.12s linear; }
+
 #stamina {
   margin-top: 6px;
   height: 3px;
