@@ -10,13 +10,18 @@ import {
 } from './tasks.js';
 
 const SHIFT_SECONDS = 780; // 08:00 -> 20:00
+// nights run shorter: dread does not survive thirteen minutes, and the back
+// half was where it turned into chores
+const NIGHT_SECONDS = 540;
 const SHIFT_START_HOUR = 8;
 const NIGHT_START_HOUR = 22; // 22:00 -> 10:00, though nobody stays that long
 const SHIFT_HOURS = 12;
 const INCIDENT_GAP = [55, 105];
 
 export class Game {
-  constructor({ scene, camera, player, racks, stations, hud, audio, presence, entity }) {
+  constructor({
+    scene, camera, player, racks, stations, hud, audio, presence, entity, partner,
+  }) {
     this.scene = scene;
     this.camera = camera;
     this.player = player;
@@ -26,6 +31,7 @@ export class Game {
     this.audio = audio;
     this.presence = presence;
     this.entity = entity;
+    this.partner = partner;
     this.mode = 'day';
     this.noise = 0;
     this.entityGraceUntil = 0;
@@ -78,6 +84,7 @@ export class Game {
     this.tasks = createRoutineTasks(this.stations, mode);
     this.nextIncidentAt = 30;
     this.hud.setCompact(mode === 'night');
+    this.partner?.reset();
     this.hud.say(
       mode === 'night'
         ? 'Nights. Ramos took the genset walk. Work the list.'
@@ -87,16 +94,21 @@ export class Game {
     this.audio?.startAmbience();
   }
 
+  /** Length of the shift currently being worked. */
+  get duration() {
+    return this.mode === 'night' ? NIGHT_SECONDS : SHIFT_SECONDS;
+  }
+
   get clockText() {
     const start = this.mode === 'night' ? NIGHT_START_HOUR : SHIFT_START_HOUR;
-    const hours = start + (this.time / SHIFT_SECONDS) * SHIFT_HOURS;
+    const hours = start + (this.time / this.duration) * SHIFT_HOURS;
     const h = Math.floor(hours) % 24;
     const m = Math.floor((hours - Math.floor(hours)) * 60);
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   }
 
   get progress() {
-    return this.time / SHIFT_SECONDS;
+    return this.time / this.duration;
   }
 
   get openTasks() {
@@ -118,18 +130,19 @@ export class Game {
     this._updateScreens(dt);
     this._updateHum();
     if (this.mode === 'night') {
+      this.partner?.update(this.progress);
       this.presence?.update(dt, this.progress);
       this._updateEntity(dt);
     }
     this._refreshHud();
 
-    if (this.time >= SHIFT_SECONDS) this.endShift('clock');
+    if (this.time >= this.duration) this.endShift('clock');
   }
 
   // ---- world simulation ----------------------------------------------------
 
   _updateIncidents() {
-    if (this.time < this.nextIncidentAt || this.time > SHIFT_SECONDS - 90) return;
+    if (this.time < this.nextIncidentAt || this.time > this.duration - 90) return;
     const incident = rollIncident(this, this.time);
     this.nextIncidentAt =
       this.time + INCIDENT_GAP[0] + Math.random() * (INCIDENT_GAP[1] - INCIDENT_GAP[0]);
@@ -290,7 +303,8 @@ export class Game {
     this.audio?.stinger();
     this.entity?.despawn();
 
-    this.time = Math.min(SHIFT_SECONDS - 1, this.time + SHIFT_SECONDS / 12);
+    // losing an hour must never wind the clock back, whatever the shift length
+    this.time = Math.max(this.time, Math.min(this.duration - 1, this.time + this.duration / 12));
     this.uptime = Math.max(90, this.uptime - 0.4);
     for (const rack of this.racks) rack.temp += 2.5;
     this.carrying = null;
@@ -355,7 +369,7 @@ export class Game {
     const drain = criticals * 0.011 + (this.hotRacks ?? 0) * 0.0016;
     if (drain > 0) this.uptime = Math.max(90, this.uptime - drain * dt);
 
-    if (!this.handoverAdded && this.time > SHIFT_SECONDS * 0.82) {
+    if (!this.handoverAdded && this.time > this.duration * 0.82) {
       this.handoverAdded = true;
       this.tasks.push(createHandoverTask(this.noc, this.mode));
       this.hud.say('End of shift approaching — file the handover at the NOC.', 'warn');
@@ -391,15 +405,21 @@ export class Game {
         holdTime: 3.0,
         run: () => {
           rack.fault = null;
-          this.carrying = ITEMS.deadDrive;
           this.audio?.success();
-          if (task) {
-            task.need = null;
-            task.stage = 'dispose';
-            task.title = `Dispose failed drive from ${rack.id}`;
-            task.hint = 'E-waste bin, south-west corner';
+          // days log the dead drive properly; nights have bigger problems
+          if (this.mode === 'night') {
+            this.carrying = null;
+            if (task) this._completeTask(task, `${rack.id} is back. Drive swapped.`);
+          } else {
+            this.carrying = ITEMS.deadDrive;
+            if (task) {
+              task.need = null;
+              task.stage = 'dispose';
+              task.title = `Dispose failed drive from ${rack.id}`;
+              task.hint = 'E-waste bin, south-west corner';
+            }
+            this.hud.say(`New drive online in ${rack.id}. Array rebuilding.`, 'good');
           }
-          this.hud.say(`New drive online in ${rack.id}. Array rebuilding.`, 'good');
         },
       };
     }
@@ -917,6 +937,7 @@ export class Game {
       missed: this.stats.missed,
       caught: this.stats.caught,
       mode: this.mode,
+      partnerLost: Boolean(this.partner?.lost),
       clock: this.clockText,
     };
     return this.report;

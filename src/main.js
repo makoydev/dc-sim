@@ -12,6 +12,7 @@ import { Torch } from './torch.js';
 import { Presence } from './presence.js';
 import { Entity } from './entity.js';
 import { Perf } from './perf.js';
+import { Partner } from './partner.js';
 
 const canvas = document.getElementById('scene');
 // antialiasing is not worth its cost on a hall made of boxes, and the
@@ -38,8 +39,9 @@ const audio = new Audio();
 const torch = new Torch(camera, scene);
 const presence = new Presence({ camera, player, racks, hud, audio });
 const entity = new Entity({ scene, player, racks, hud, audio });
+const partner = new Partner({ hud, audio, entity });
 const game = new Game({
-  scene, camera, player, racks, stations, hud, audio, presence, entity,
+  scene, camera, player, racks, stations, hud, audio, presence, entity, partner,
 });
 const interaction = new Interaction(camera, scene, (target) => game.resolveAction(target));
 const highlighter = new Highlighter(scene);
@@ -107,9 +109,9 @@ function showBriefing() {
        <button id="day">Day shift &middot; 08:00</button>
        <button id="night" class="ghost">Night shift &middot; 22:00</button>
      </div>
-     <p class="dim small">Nights: the hall runs on emergency lighting and you
-     work by torch. Sound carries — the fans cover you, while they are running.
-     Ramos is on the genset walk. He will not be answering.</p>`,
+     <p class="dim small">Nights: shorter list, emergency lighting, and you work
+     by torch. Sound carries — the fans cover you, while they are running.
+     Ramos is down at the genset. He will be on the radio.</p>`,
     (root) => {
       root.querySelector('#day').addEventListener('click', () => beginShift('day'));
       root.querySelector('#night').addEventListener('click', () => beginShift('night'));
@@ -143,6 +145,10 @@ function showReport(report) {
      ${line('Final uptime', `${report.uptime.toFixed(3)}%`, report.uptime > 99.9 ? 'ok' : 'warn')}
      ${report.mode === 'night'
        ? line('Hours you cannot account for', report.caught, report.caught ? 'bad' : 'dim')
+       : ''}
+     ${report.mode === 'night'
+       ? line('Ramos', report.partnerLost ? 'did not clock out' : 'on the genset walk',
+              report.partnerLost ? 'bad' : 'dim')
        : ''}
      ${line('Score', `${report.score}/100`)}
      <p></p><button id="again">Start another shift</button>`,
