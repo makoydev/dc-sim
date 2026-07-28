@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { addCollider } from './world.js';
 import { rackFrontTexture, rackBackTexture } from './textures.js';
+import { registerPickable } from './pickables.js';
 
 export const RACK = { w: 0.76, h: 2.1, d: 1.1 };
 
@@ -73,9 +74,10 @@ export function buildRacks(scene) {
         load: 0.3 + Math.random() * 0.4,
         fault: null, // set by the incident system
       };
-      // tag the whole group so looking at any part of the rack counts
+      // the frame box encloses the panels, so it alone is enough to pick with
       group.userData.rack = rack;
       frame.userData.rack = rack;
+      registerPickable(frame);
       racks.push(rack);
     }
   }

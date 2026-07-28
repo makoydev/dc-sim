@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { addCollider } from './world.js';
 import { Screen } from './screen.js';
+import { registerPickable } from './pickables.js';
 
 const metal = (color, rough = 0.5, met = 0.85) =>
   new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: met });
@@ -15,6 +16,8 @@ const MAT = {
     transparent: true, opacity: 0.5,
   }),
 };
+
+const HIT_MAT = new THREE.MeshBasicMaterial({ visible: false });
 
 function box(parent, w, h, d, x, y, z, mat = MAT.case) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
@@ -39,10 +42,24 @@ export function buildProps(scene) {
   const fans = [];
   const screens = [];
 
-  // tagging the root group means any part of a prop is lookable-at
+  // Each prop gets one invisible box covering its whole footprint. Looking
+  // anywhere on a CRAC — grille, display, fan — picks the unit, and the box
+  // doubles as the bounds the focus brackets are drawn around.
   const add = (station, root) => {
     station.mesh.userData.station = station;
+    station.root = root ?? station.mesh;
     if (root) root.userData.station = station;
+
+    const bounds = new THREE.Box3().setFromObject(station.root);
+    const size = bounds.getSize(new THREE.Vector3());
+    const hit = new THREE.Mesh(new THREE.BoxGeometry(size.x, size.y, size.z), HIT_MAT);
+    hit.position.copy(bounds.getCenter(new THREE.Vector3()));
+    hit.visible = false; // still raycastable — three only skips on layers
+    hit.userData.station = station;
+    scene.add(hit);
+    registerPickable(hit);
+
+    station.bounds = bounds;
     stations.push(station);
     return station;
   };
@@ -139,7 +156,7 @@ export function buildProps(scene) {
     const g = new THREE.Group();
     g.position.set(-12.3, 0, 1.1 + i * 1.0);
     scene.add(g);
-    box(g, 0.8, 1.8, 0.95, 0, 0.9, 0, MAT.darkCase);
+    registerPickable(box(g, 0.8, 1.8, 0.95, 0, 0.9, 0, MAT.darkCase)); // occluder only
     for (let s = 0; s < 3; s++) box(g, 0.72, 0.06, 0.9, 0, 0.5 + s * 0.5, 0.04, MAT.trim);
     addCollider(-12.3, 1.1 + i * 1.0, 0.8, 0.95);
   }

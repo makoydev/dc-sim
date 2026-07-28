@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { pickables } from './pickables.js';
 
 const RANGE = 2.8;
 
@@ -15,6 +16,7 @@ export class Interaction {
     this.raycaster = new THREE.Raycaster();
     this.raycaster.far = RANGE;
     this.pointer = new THREE.Vector2(0, 0);
+    this._hits = [];
     this.action = null;
     this.target = null;
     this.holding = false;
@@ -36,21 +38,18 @@ export class Interaction {
     });
   }
 
+  /**
+   * Nearest hit wins, and the first hit always decides: an untagged mesh in
+   * the list is a wall or a rack body, so it blocks whatever sits behind it.
+   */
   _pick() {
     this.raycaster.setFromCamera(this.pointer, this.camera);
-    const hits = this.raycaster.intersectObjects(this.scene.children, true);
-    for (const hit of hits) {
-      let obj = hit.object;
-      while (obj) {
-        const data = obj.userData;
-        if (data.rack) return data.rack;
-        if (data.station) return data.station;
-        obj = obj.parent;
-      }
-      // an opaque non-interactive surface blocks anything behind it
-      if (hit.object.visible && hit.object.type === 'Mesh') return null;
-    }
-    return null;
+    this._hits.length = 0;
+    this.raycaster.intersectObjects(pickables, false, this._hits);
+    const hit = this._hits[0];
+    if (!hit) return null;
+    const data = hit.object.userData;
+    return data.rack ?? data.station ?? null;
   }
 
   update(dt) {

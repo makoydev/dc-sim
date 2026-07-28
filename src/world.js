@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { floorTexture, wallTexture } from './textures.js';
+import { registerPickable } from './pickables.js';
 
 export const HALL = { minX: -13, maxX: 13, minZ: -11, maxZ: 11, height: 4.2 };
 
@@ -20,6 +21,7 @@ function wall(scene, mat, w, h, d, x, y, z) {
   mesh.position.set(x, y, z);
   scene.add(mesh);
   addCollider(x, z, w, d);
+  registerPickable(mesh);
   return mesh;
 }
 
@@ -39,6 +41,7 @@ export function buildHall(scene) {
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(cx, 0, cz);
   scene.add(floor);
+  registerPickable(floor);
 
   const ceilMat = new THREE.MeshStandardMaterial({ color: 0x0b1015, roughness: 1 });
   const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(w, d), ceilMat);
