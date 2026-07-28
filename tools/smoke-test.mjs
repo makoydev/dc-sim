@@ -78,6 +78,7 @@ const hud = {
   say: noop, setStatus: noop, setChecklist: noop, setAlerts: noop,
   setCarry: noop, setStamina: noop, setMarker: noop, setPrompt: noop,
   setTorch: noop, setNoise: noop, setHiding: noop,
+  setCompact: noop, setObjective: noop,
 };
 
 const scene = new THREE.Scene();
@@ -257,6 +258,33 @@ const { Torch } = await import('../src/torch.js');
   setLightingMode('day');
   if (rig.troffers.some((l) => !l.visible)) fail('day lighting did not come back');
   console.log(`night shift OK · ${events.length} presence events, torch drains and recovers`);
+}
+
+// ---- night checklist -------------------------------------------------------
+
+{
+  const { createRoutineTasks } = await import('../src/tasks.js');
+  const dayList = createRoutineTasks(stations, 'day');
+  const nightList = createRoutineTasks(stations, 'night');
+
+  if (nightList.length > 2) {
+    fail(`night starts with ${nightList.length} routine tasks, should be at most 2`);
+  }
+  if (dayList.length < 5) fail('the day shift lost its full checklist');
+
+  const nightWalk = nightList.find((t) => t.kind === 'walk');
+  if (!nightWalk || nightWalk.total > 2) {
+    fail(`night walkthrough covers ${nightWalk?.total} aisles, should be 2`);
+  }
+
+  // night wording should not require knowing the acronyms
+  const JARGON = /\b(CRAC|UPS|PDU|VESDA|SLA|uplink|reseat|mains|breaker)\b/;
+  for (const t of nightList) {
+    if (JARGON.test(t.title)) fail(`night task still reads like jargon: "${t.title}"`);
+  }
+  console.log(
+    `checklist OK · ${nightList.length} night tasks vs ${dayList.length} by day, plain wording`,
+  );
 }
 
 // ---- the entity ------------------------------------------------------------

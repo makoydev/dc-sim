@@ -26,11 +26,51 @@ export const AISLES = [
   { name: 'Hot aisle E/F', pos: new THREE.Vector3(3.5, 0, 6.15) },
 ];
 
-export function createRoutineTasks(stations) {
+/** The two enclosed cold aisles — the whole night walkthrough. */
+const NIGHT_AISLES = [AISLES[1], AISLES[2]];
+
+const walkTask = (waypoints, title, hint) =>
+  task({
+    kind: 'walk',
+    title,
+    hint,
+    waypoints,
+    targets: waypoints.map((a) => ({ label: a.name, position: a.pos })),
+    remaining: waypoints.length,
+    total: waypoints.length,
+    visited: new Set(),
+  });
+
+/**
+ * Days are the full round. Nights are two jobs and a signature — with a
+ * monster in the building, a five-item checklist in facility jargon stops
+ * being tension and becomes homework. Night wording avoids the acronyms on
+ * purpose: you should not need to know what a CRAC is to work out where to go.
+ */
+export function createRoutineTasks(stations, mode = 'day') {
   const cracs = stations.filter((s) => s.kind === 'crac');
   const upses = stations.filter((s) => s.kind === 'ups');
   const vesda = stations.find((s) => s.kind === 'fire');
   const coffee = stations.find((s) => s.kind === 'coffee');
+
+  if (mode === 'night') {
+    return [
+      walkTask(
+        NIGHT_AISLES,
+        'Look down both cold aisles',
+        'The two closed-in rows in the middle of the hall.',
+      ),
+      task({
+        kind: 'crac-log',
+        title: 'Check the four cooling units',
+        hint: 'The tall grey units along the far wall.',
+        targets: cracs,
+        remaining: cracs.length,
+        total: cracs.length,
+        visited: new Set(),
+      }),
+    ];
+  }
 
   return [
     task({
@@ -40,14 +80,7 @@ export function createRoutineTasks(stations) {
       optional: true,
       targets: [coffee],
     }),
-    task({
-      kind: 'walk',
-      title: 'Walk every aisle and eyeball the racks',
-      targets: AISLES.map((a) => ({ label: a.name, position: a.pos })),
-      remaining: AISLES.length,
-      total: AISLES.length,
-      visited: new Set(),
-    }),
+    walkTask(AISLES, 'Walk every aisle and eyeball the racks'),
     task({
       kind: 'crac-log',
       title: 'Log supply/return temps on all CRAC units',
@@ -72,11 +105,13 @@ export function createRoutineTasks(stations) {
   ];
 }
 
-export function createHandoverTask(noc) {
+export function createHandoverTask(noc, mode = 'day') {
   return task({
     kind: 'handover',
-    title: 'File the shift handover at the NOC terminal',
-    hint: 'Do this before 20:00.',
+    title: mode === 'night'
+      ? 'Sign off at the desk by the door'
+      : 'File the shift handover at the NOC terminal',
+    hint: mode === 'night' ? 'Then you can go home.' : 'Do this before 20:00.',
     targets: [noc],
     severity: 'warning',
   });
@@ -91,6 +126,8 @@ const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
  */
 export function rollIncident(world, now) {
   const { racks, stations } = world;
+  // same fault, said two ways: the night shift should read like instructions
+  const night = world.mode === 'night';
   const healthyRacks = racks.filter((r) => !r.fault);
   const cracs = stations.filter((s) => s.kind === 'crac' && s.running && !s.filterClogged);
   const pdus = stations.filter((s) => s.kind === 'pdu' && !s.breakerTripped);
@@ -109,8 +146,12 @@ export function rollIncident(world, now) {
       rack.fault = { type: 'drive', severity: 'warning' };
       return task({
         kind: 'drive-swap',
-        title: `Replace failed drive — rack ${rack.id}`,
-        hint: 'Grab a spare from the cage first.',
+        title: night
+          ? `Swap the dead drive in rack ${rack.id}`
+          : `Replace failed drive — rack ${rack.id}`,
+        hint: night
+          ? 'Spare drives are on the shelves in the far corner.'
+          : 'Grab a spare from the cage first.',
         need: 'drive',
         targets: [rack],
         rack,
@@ -123,8 +164,12 @@ export function rollIncident(world, now) {
       rack.fault = { type: 'cable', severity: 'warning' };
       return task({
         kind: 'cable-fix',
-        title: `Uplink flapping — reseat rack ${rack.id}`,
-        hint: 'A fresh patch cable is in the spares cage.',
+        title: night
+          ? `Refit the loose cable in rack ${rack.id}`
+          : `Uplink flapping — reseat rack ${rack.id}`,
+        hint: night
+          ? 'Spare cables are on the shelves in the far corner.'
+          : 'A fresh patch cable is in the spares cage.',
         need: 'cable',
         targets: [rack],
         rack,
@@ -137,8 +182,12 @@ export function rollIncident(world, now) {
       crac.filterClogged = true;
       return task({
         kind: 'filter-swap',
-        title: `Clogged filter — ${crac.label}`,
-        hint: 'Cooling output is down until it is changed.',
+        title: night
+          ? `Change the blocked filter on ${crac.label}`
+          : `Clogged filter — ${crac.label}`,
+        hint: night
+          ? 'It is barely cooling until you do. Filters are on the shelves.'
+          : 'Cooling output is down until it is changed.',
         need: 'filter',
         targets: [crac],
         crac,
@@ -151,8 +200,12 @@ export function rollIncident(world, now) {
       crac.running = false;
       return task({
         kind: 'crac-restart',
-        title: `${crac.label} tripped — restart the unit`,
-        hint: 'That zone is heating up right now.',
+        title: night
+          ? `Restart ${crac.label} — it has stopped`
+          : `${crac.label} tripped — restart the unit`,
+        hint: night
+          ? 'That end of the hall is heating up, and going quiet.'
+          : 'That zone is heating up right now.',
         targets: [crac],
         crac,
         dueAt: now + 150,
@@ -164,8 +217,12 @@ export function rollIncident(world, now) {
       pdu.breakerTripped = true;
       return task({
         kind: 'breaker-reset',
-        title: `${pdu.label} breaker tripped — reset it`,
-        hint: 'Racks on that feed lost a power path.',
+        title: night
+          ? `Flip the tripped switch on ${pdu.label}`
+          : `${pdu.label} breaker tripped — reset it`,
+        hint: night
+          ? 'The grey panel on the near wall.'
+          : 'Racks on that feed lost a power path.',
         targets: [pdu],
         pdu,
         dueAt: now + 170,
@@ -177,8 +234,12 @@ export function rollIncident(world, now) {
       ups.onBattery = true;
       return task({
         kind: 'ups-transfer',
-        title: `${ups.label} on battery — transfer back to mains`,
-        hint: 'Runtime is finite. Move.',
+        title: night
+          ? `Put ${ups.label} back on mains power`
+          : `${ups.label} on battery — transfer back to mains`,
+        hint: night
+          ? 'It is running on batteries. They do not last.'
+          : 'Runtime is finite. Move.',
         targets: [ups],
         ups,
         dueAt: now + 140,
@@ -192,7 +253,7 @@ export function rollIncident(world, now) {
 export function createSabotageTask(crac, dueAt) {
   return task({
     kind: 'crac-restart',
-    title: `${crac.label} stopped — restart the unit`,
+    title: `Restart ${crac.label} — it just stopped`,
     hint: 'It was running a minute ago.',
     targets: [crac],
     crac,

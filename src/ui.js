@@ -19,9 +19,14 @@ export class HUD {
       </div>
       <div id="status">
         <div class="panel cell"><b class="clock">08:00</b><span>shift clock</span></div>
-        <div class="panel cell"><b class="uptime">100.00%</b><span>uptime sla</span></div>
-        <div class="panel cell"><b class="temp">21.5&deg;C</b><span>hall avg</span></div>
-        <div class="panel cell"><b class="tasks">0/0</b><span>checklist</span></div>
+        <div class="panel cell extra"><b class="uptime">100.00%</b><span>uptime sla</span></div>
+        <div class="panel cell extra"><b class="temp">21.5&deg;C</b><span>hall avg</span></div>
+        <div class="panel cell extra"><b class="tasks">0/0</b><span>checklist</span></div>
+      </div>
+      <div id="objective" class="panel" hidden>
+        <span class="eyebrow">right now</span>
+        <div class="title"></div>
+        <div class="sub dim"></div>
       </div>
       <div id="checklist" class="panel">
         <h3><span>Shift Checklist</span><span class="dim">TAB</span></h3>
@@ -110,6 +115,32 @@ export class HUD {
   toggleChecklist() {
     this.checklist.style.display =
       this.checklist.style.display === 'none' ? 'block' : 'none';
+  }
+
+  /**
+   * Compact mode is the night shift: one objective, a clock, and nothing else
+   * competing for attention. The full list is still a Tab away.
+   */
+  setCompact(compact) {
+    this.root.querySelector('#status').classList.toggle('compact', compact);
+    this.q('#objective').hidden = !compact;
+    this.checklist.style.display = compact ? 'none' : 'block';
+  }
+
+  /** The single line that replaces the checklist when compact. */
+  setObjective(objective) {
+    const node = this.q('#objective');
+    if (!objective) {
+      node.hidden = true;
+      return;
+    }
+    const signature = `${objective.title}|${objective.sub ?? ''}|${objective.urgent}`;
+    if (signature === this._objectiveSignature) return;
+    this._objectiveSignature = signature;
+    node.hidden = false;
+    node.querySelector('.title').textContent = objective.title;
+    node.querySelector('.sub').textContent = objective.sub ?? '';
+    node.classList.toggle('urgent', Boolean(objective.urgent));
   }
 
   setAlerts(list) {

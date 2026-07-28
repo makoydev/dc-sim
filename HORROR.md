@@ -166,6 +166,20 @@ full checklist stays on the day shift. Same hall, two modes — and the day shif
 doubles as the tutorial that teaches you the geography you will need in the
 dark.
 
+**Confirmed by playtest.** The first person to play this who had not built it
+said the checklist was "a lot and too complex". Three things came out of that:
+
+- **Nights run two routine tasks plus the sign-off**, against five by day.
+- **Night wording drops the acronyms.** "Log supply/return temps on all CRAC
+  units" became "Check the four cooling units"; "Uplink flapping — reseat rack
+  C07" became "Refit the loose cable in rack C07". You should not need to know
+  what a CRAC is to work out where to go. A test fails the build if a night
+  task title contains CRAC, UPS, PDU, VESDA, uplink, reseat, mains or breaker.
+- **The HUD shows one objective at a time.** At night the uptime, hall
+  temperature and checklist counters are hidden and the list collapses to a
+  single line — still a Tab away if you want the whole thing. Eleven HUD
+  elements while something hunts you is not tension, it is admin.
+
 ---
 
 ## 8. Build order

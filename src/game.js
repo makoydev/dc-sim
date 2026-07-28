@@ -75,8 +75,9 @@ export class Game {
     this.mode = mode;
     this.phase = 'running';
     this.time = 0;
-    this.tasks = createRoutineTasks(this.stations);
+    this.tasks = createRoutineTasks(this.stations, mode);
     this.nextIncidentAt = 30;
+    this.hud.setCompact(mode === 'night');
     this.hud.say(
       mode === 'night'
         ? 'Nights. Ramos took the genset walk. Work the list.'
@@ -144,14 +145,18 @@ export class Game {
   _updateWalkthrough() {
     const walk = this.tasks.find((t) => t.kind === 'walk' && t.state === 'todo');
     if (!walk) return;
-    for (const aisle of AISLES) {
+    const waypoints = walk.waypoints ?? AISLES;
+    for (const aisle of waypoints) {
       if (walk.visited.has(aisle.name)) continue;
       if (this.player.position.distanceTo(aisle.pos) > 2.6) continue;
       walk.visited.add(aisle.name);
-      walk.remaining = AISLES.length - walk.visited.size;
+      walk.remaining = waypoints.length - walk.visited.size;
       this.audio?.blip();
-      if (walk.remaining === 0) this._completeTask(walk, `Walkthrough logged — ${AISLES.length} aisles clear`);
-      else this.hud.say(`Inspected ${aisle.name} (${walk.visited.size}/${AISLES.length})`);
+      if (walk.remaining === 0) {
+        this._completeTask(walk, `Walkthrough done — ${waypoints.length} aisles clear`);
+      } else {
+        this.hud.say(`Inspected ${aisle.name} (${walk.visited.size}/${waypoints.length})`);
+      }
     }
   }
 
@@ -352,7 +357,7 @@ export class Game {
 
     if (!this.handoverAdded && this.time > SHIFT_SECONDS * 0.82) {
       this.handoverAdded = true;
-      this.tasks.push(createHandoverTask(this.noc));
+      this.tasks.push(createHandoverTask(this.noc, this.mode));
       this.hud.say('End of shift approaching — file the handover at the NOC.', 'warn');
     }
   }
@@ -697,7 +702,7 @@ export class Game {
       return { pos: this.spares.position, label: `Spares cage — ${ITEMS[task.need].label}` };
     }
     if (task.kind === 'walk') {
-      const next = AISLES.find((a) => !task.visited.has(a.name));
+      const next = (task.waypoints ?? AISLES).find((a) => !task.visited.has(a.name));
       return next ? { pos: next.pos.clone().setY(1.6), label: next.name } : null;
     }
     const target = task.targets?.find((t) => {
@@ -732,6 +737,16 @@ export class Game {
         dueText: this._dueText(t),
         dueClass: this._dueClass(t),
       })),
+    );
+
+    this.hud.setObjective(
+      this.mode === 'night' && tracked
+        ? {
+            title: tracked.title,
+            sub: this._progressText(tracked) || this._dueText(tracked),
+            urgent: tracked.severity === 'critical',
+          }
+        : null,
     );
 
     this.hud.setAlerts(

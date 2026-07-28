@@ -32,9 +32,10 @@ The game needs to be served over HTTP (ES modules + import maps); opening
 
 ## Two shifts
 
-**Day** is the working hall described below. **Night** is the same hall at
-22:00 on emergency lighting, worked by torch, with something on the floor that
-hunts by sound. The fans cover you while they are running; a cold aisle or a
+**Day** is the working hall described below — the full checklist, no threat.
+**Night** is the same hall at 22:00 on emergency lighting, worked by torch,
+with a much shorter list, plain-language jobs, one objective on screen, and
+something on the floor that hunts by sound. The fans cover you while they are running; a cold aisle or a
 cabinet will hide you. See [HORROR.md](./HORROR.md).
 
 ## The shift
