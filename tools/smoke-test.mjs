@@ -290,6 +290,33 @@ const { inContainment } = await import('../src/world.js');
   if (!caught) fail('the entity never caught a player standing still and shouting');
   console.log(`entity OK · caught a noisy stationary player in the open`);
 
+  // going quiet must not work at close range: it heard you once, it is coming
+  entity.despawn();
+  entity.spawn();
+  entity.teleport(new THREE.Vector3(-4, 0, -9.8));
+  player.position.set(4, 1.68, -9.8);
+  caught = 0;
+  entity.hear(1, player.position.clone()); // one noise, then absolute silence
+  for (let i = 0; i < 60 * 30 && !caught; i++) entity.update(1 / 30);
+  if (!caught) fail('holding still inside lock range shook it off — it should close in');
+  console.log('lock-on OK · going quiet at close range does not shake it');
+
+  // but going quiet across the hall should
+  entity.despawn();
+  entity.spawn();
+  entity.teleport(new THREE.Vector3(-11, 0, 9.3));
+  player.position.set(11, 1.68, -9.8);
+  caught = 0;
+  entity.hear(1, player.position.clone());
+  let gaveUp = false;
+  for (let i = 0; i < 90 * 30 && !caught; i++) {
+    entity.update(1 / 30);
+    if (entity.state === 'patrol') { gaveUp = true; break; }
+  }
+  if (caught) fail('it found a silent player on the far side of the hall');
+  if (!gaveUp) fail('it never gave up on a silent player across the hall');
+  console.log('give-up OK · silence works at range, not up close');
+
   // and it must never enter containment, however loud you are in there
   const safe = { x: 0, z: -3.7 };
   player.position.set(safe.x, 1.68, safe.z);
@@ -329,6 +356,24 @@ const { inContainment } = await import('../src/world.js');
   if (cracs.length && game.entityGraceUntil <= game.time) fail('no grace period after a catch');
   console.log('catch OK · costs an hour and heat, shift continues');
 
+  // it has to turn up early enough to be the point of the shift
+  {
+    const solo = new Game({
+      scene, camera, player, racks, stations, hud, audio: null,
+      presence: null, entity: new Entity({ scene, player, racks, hud, audio: null }),
+    });
+    solo.start('night');
+    player.position.set(0, 1.68, -10);
+    let arrivedAt = null;
+    for (let i = 0; i < 300 * 30 && !arrivedAt; i++) {
+      solo.update(1 / 30);
+      if (solo.entity.state !== 'dormant') arrivedAt = solo.time;
+    }
+    if (!arrivedAt) fail('the entity never arrived at all');
+    if (arrivedAt > 90) fail(`the entity took ${arrivedAt.toFixed(0)}s to show up`);
+    console.log(`arrival OK · on the floor after ${arrivedAt.toFixed(0)}s of a 780s shift`);
+  }
+
   // ---- hiding --------------------------------------------------------------
 
   const spots = stations.filter((s) => s.kind === 'hide');
@@ -353,7 +398,7 @@ const { inContainment } = await import('../src/world.js');
 
     // it must not be able to reach you, however close it stands
     entity.spawn();
-    entity.position.copy(player.position).setY(0);
+    entity.teleport(player.position);
     let caughtWhileHidden = 0;
     entity.onCatch = () => { caughtWhileHidden++; };
     for (let i = 0; i < 300; i++) entity.update(1 / 30);
