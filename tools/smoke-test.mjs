@@ -77,7 +77,7 @@ const noop = () => {};
 const hud = {
   say: noop, setStatus: noop, setChecklist: noop, setAlerts: noop,
   setCarry: noop, setStamina: noop, setMarker: noop, setPrompt: noop,
-  setTorch: noop,
+  setTorch: noop, setNoise: noop, setHiding: noop,
 };
 
 const scene = new THREE.Scene();
@@ -328,6 +328,53 @@ const { inContainment } = await import('../src/world.js');
   if (game.stats.caught !== before.caught + 1) fail('the catch was not counted');
   if (cracs.length && game.entityGraceUntil <= game.time) fail('no grace period after a catch');
   console.log('catch OK · costs an hour and heat, shift continues');
+
+  // ---- hiding --------------------------------------------------------------
+
+  const spots = stations.filter((s) => s.kind === 'hide');
+  if (spots.length < 4) fail(`expected at least 4 hiding places, found ${spots.length}`);
+  if (!spots.some((s) => s.hide.under) || !spots.some((s) => !s.hide.under)) {
+    fail('need somewhere to get under and somewhere to get inside');
+  }
+
+  game.mode = 'night';
+  game.phase = 'running';
+  game.entity = entity;
+  entity.isPlayerHidden = () => Boolean(game.hidden);
+
+  for (const spot of spots) {
+    game.time += 2; // clear the re-entry cooldown left by the previous spot
+    const action = game.resolveAction(spot);
+    if (!action || action.disabled) fail(`${spot.id} could not be hidden in at night`);
+    action.run();
+    if (game.hidden !== spot) fail(`${spot.id} did not become the hiding place`);
+    if (!player.frozen) fail('the player can still walk while hidden');
+    if (!player.lookArc) fail('the view is not constrained while hidden');
+
+    // it must not be able to reach you, however close it stands
+    entity.spawn();
+    entity.position.copy(player.position).setY(0);
+    let caughtWhileHidden = 0;
+    entity.onCatch = () => { caughtWhileHidden++; };
+    for (let i = 0; i < 300; i++) entity.update(1 / 30);
+    if (caughtWhileHidden) fail(`${spot.id} did not protect the player`);
+
+    // and standing still in there makes no noise at all
+    const before = game.noise;
+    game.emitNoise(1);
+    if (game.noise > before) fail('a hidden player still made noise');
+
+    game.exitHiding();
+    if (game.hidden) fail('could not get out again');
+    if (player.frozen || player.lookArc) fail('exiting hiding left the player stuck');
+    entity.despawn();
+  }
+  console.log(`hiding OK · ${spots.length} spots, safe while inside, no noise, exits clean`);
+
+  // the day shift should offer them but refuse
+  game.mode = 'day';
+  const dayAction = game.resolveAction(spots[0]);
+  if (!dayAction?.disabled) fail('hiding should be pointless on the day shift');
 }
 
 console.log('smoke test OK');
