@@ -212,8 +212,15 @@ const { Torch } = await import('../src/torch.js');
 
 {
   setLightingMode('night');
-  if (rig.troffers.some((l) => l.intensity > 0)) fail('ceiling grid still lit at night');
-  if (!rig.emergency.every(({ lamp }) => lamp.intensity > 0)) fail('emergency lighting is dark');
+  if (rig.troffers.some((l) => l.visible)) fail('ceiling grid still lit at night');
+  if (!rig.emergency.every(({ lamp }) => lamp.visible && lamp.intensity > 0)) {
+    fail('emergency lighting is dark');
+  }
+  // a zero-intensity light still costs a full evaluation per fragment, so the
+  // rig must switch off rather than dim
+  if (rig.troffers.some((l) => l.intensity === 0)) {
+    fail('troffers were dimmed to zero instead of switched off');
+  }
 
   const torch = new Torch(camera, scene);
   torch.toggle();
@@ -248,7 +255,7 @@ const { Torch } = await import('../src/torch.js');
   }
 
   setLightingMode('day');
-  if (rig.troffers.some((l) => l.intensity === 0)) fail('day lighting did not come back');
+  if (rig.troffers.some((l) => !l.visible)) fail('day lighting did not come back');
   console.log(`night shift OK · ${events.length} presence events, torch drains and recovers`);
 }
 

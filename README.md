@@ -26,6 +26,7 @@ The game needs to be served over HTTP (ES modules + import maps); opening
 | `E` | Interact |
 | `F` | Torch (night shift) |
 | `E` | Hide in a cabinet or under a bench (night), `E` again to come out |
+| `F3` | Frame rate, draw calls, resolution scale |
 | `Tab` | Toggle checklist |
 | `Esc` | Release pointer |
 
@@ -69,9 +70,11 @@ src/textures.js     procedurally drawn materials
 src/audio.js        synthesised hum, pagers, footsteps and night sounds
 src/torch.js        the hand torch and its battery
 src/presence.js     night-shift director — flickers, footsteps, phantom faults
+src/perf.js         frame-rate governor and the F3 stats overlay
 src/entity.js       the thing that hunts by sound, and its aisle nav graph
 tools/smoke-test.mjs  headless full-shift run
 tools/light-check.mjs samples the light plan at the spots a player stands
+tools/perf-check.mjs  counts draw calls, lights and triangles against a budget
 vendor/three/       pinned three.js build, so there is no build step
 ```
 
@@ -93,6 +96,14 @@ npm run lights
 Samples the hall's light plan at the spots a player actually stands — the CRAC
 faces, the UPS bank, the aisles — and fails if the working areas end up more
 than 4x apart. Useful for judging a lighting change without a screenshot.
+
+```bash
+npm run perf
+```
+
+Counts draw calls, punctual lights and triangles in both day and night mode and
+fails if the scene creeps past its budget. Punctual lights are the expensive
+number here: every one of them is evaluated for every fragment.
 
 ## What's next
 
