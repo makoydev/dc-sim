@@ -250,6 +250,22 @@ html, body {
 }
 #hiding.on { opacity: 1; }
 
+#perf {
+  position: absolute;
+  left: 14px;
+  top: 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(8, 12, 17, 0.78);
+  border: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--dim);
+}
+#perf b { color: var(--accent); font-size: 15px; font-weight: 600; }
+
 /* ---- objective marker --------------------------------------------------- */
 #marker {
   position: absolute;

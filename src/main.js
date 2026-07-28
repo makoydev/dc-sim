@@ -11,10 +11,12 @@ import { Game } from './game.js';
 import { Torch } from './torch.js';
 import { Presence } from './presence.js';
 import { Entity } from './entity.js';
+import { Perf } from './perf.js';
 
 const canvas = document.getElementById('scene');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+// antialiasing is not worth its cost on a hall made of boxes, and the
+// resolution governor below is a far better use of the same milliseconds
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.14;
 
@@ -41,6 +43,7 @@ const game = new Game({
 });
 const interaction = new Interaction(camera, scene, (target) => game.resolveAction(target));
 const highlighter = new Highlighter(scene);
+const perf = new Perf(renderer, camera);
 
 player.onFootstep = (sprinting) => {
   audio.footstep(sprinting);
@@ -68,6 +71,7 @@ const CONTROLS = `
     <b>E</b><span>interact — hold for longer jobs</span>
     <b>F</b><span>torch (nights only — the battery is finite)</span>
     <b>Tab</b><span>show / hide the checklist</span>
+    <b>F3</b><span>frame rate and draw calls</span>
     <b>Esc</b><span>pause</span>
   </div>`;
 
@@ -173,6 +177,7 @@ let relockBy = 0;
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.1);
   const elapsed = clock.elapsedTime;
+  perf.update(dt);
   const active = game.phase === 'running' && player.locked;
 
   if (active) {
