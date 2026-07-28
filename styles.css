@@ -277,5 +277,13 @@ html, body {
   letter-spacing: 1px;
 }
 .overlay button:hover { filter: brightness(1.12); }
+.overlay .choices { display: flex; gap: 10px; flex-wrap: wrap; }
+.overlay button.ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+.overlay button.ghost:hover { border-color: var(--bad); color: #ffd9d6; filter: none; }
+.overlay p.small { font-size: 11px; margin-top: 12px; }
 .scoreline { display: flex; justify-content: space-between; padding: 5px 0; border-top: 1px solid rgba(255,255,255,0.06); }
 .grade { font-size: 54px; letter-spacing: 2px; text-align: center; margin: 6px 0 2px; }

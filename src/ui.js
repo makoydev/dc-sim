@@ -31,6 +31,7 @@ export class HUD {
       <div id="log"></div>
       <div id="carry" class="panel">
         <div class="item dim">Hands free</div>
+        <div class="torch dim" hidden>Torch off</div>
         <div id="stamina"><div></div></div>
       </div>
       <div id="marker"><div class="ring"></div><div class="text"></div></div>
@@ -131,6 +132,16 @@ export class HUD {
   setCarry(item) {
     this.carry.textContent = item ? `Carrying: ${item.label}` : 'Hands free';
     this.carry.className = item ? 'item accent' : 'item dim';
+  }
+
+  /** `torch` is null on the day shift, where there is nothing to report. */
+  setTorch(torch) {
+    const node = this.q('#carry .torch');
+    node.hidden = !torch;
+    if (!torch) return;
+    const pct = Math.round(torch.battery * 100);
+    node.textContent = torch.on ? `Torch ${pct}%` : `Torch off · ${pct}%`;
+    node.className = `torch ${!torch.on ? 'dim' : torch.low ? 'bad' : 'warn'}`;
   }
 
   setStamina(value) {
