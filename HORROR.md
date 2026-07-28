@@ -205,7 +205,35 @@ Deliberately back to front. Step 3 before step 4 is the whole trick.
 - [x] 4 — the entity: blind, sound-driven, walks the aisle graph, will not
       enter containment, kills cooling to make you audible
 - [x] 4a — hiding places, muffled audio, and a look-arc while you are in them
-- [ ] 5 — the partner
+- [x] 5 — the partner: twelve radio lines, the silence, and what answers after
+
+The build order is finished.
+
+---
+
+## 8a. Ramos
+
+Twelve radio lines across the shift, driven by shift progress rather than a
+timer so the pacing holds whatever the shift length is set to. Four movements:
+
+1. **He is fine, and bored.** Diesel, the blank fuel log, checking in on you.
+2. **Something is off.** *"Did you just come through the west door?"* — then
+   *"Alright. Then who opened it."*
+3. **It goes wrong,** and the channel goes open with nobody keying it.
+4. **It comes back** — and what comes back is stitched out of things he said
+   in the first movement, word for word. The last line invites you downstairs.
+
+The echo is the whole device, and a test enforces it: every line after the
+silence must appear verbatim inside a line from before it, so nobody can later
+write "creepy" new dialogue for that section and lose the effect.
+
+It is never resolved. There is no genset room to walk to, no body, no reveal.
+He is either a man who stopped answering or the reason the hall stopped being
+empty, and the shift report only says *"did not clock out"*.
+
+Mechanically, radio traffic after the silence nudges the entity: it does not
+learn where you are, but it stops patrolling and starts searching. The channel
+being open is itself a noise.
 
 ---
 
@@ -239,6 +267,13 @@ heating. That is deliberate — see §2.
   minutes in, by which time the player has done a lap of the racks and the
   dread has worn off. It now arrives just under a minute in, and the test
   fails if that ever slips past 90 seconds.
+- **The night shift is 9 minutes, the day shift 13.** Dread does not survive
+  thirteen minutes; the back half was where it turned into chores. Every
+  timing in the game now derives from `Game#duration` rather than a constant,
+  which also caught a real bug — being caught clamps the clock to the shift
+  length, and with two different lengths that clamp could wind time backwards.
+- **Night drops the disposal errand.** Fetch a part, fit it, done. The trip to
+  the e-waste bin is realism that costs tension; days still keep it.
 - **Distance is planar.** It walks the floor; the player's position is eye
   height. Comparing full 3D distance meant it could never physically reach
   catch range — it stood on your feet and did nothing.

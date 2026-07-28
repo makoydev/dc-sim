@@ -72,6 +72,7 @@ src/audio.js        synthesised hum, pagers, footsteps and night sounds
 src/torch.js        the hand torch and its battery
 src/presence.js     night-shift director — flickers, footsteps, phantom faults
 src/perf.js         frame-rate governor and the F3 stats overlay
+src/partner.js      Ramos on the radio, and whatever answers after
 src/entity.js       the thing that hunts by sound, and its aisle nav graph
 tools/smoke-test.mjs  headless full-shift run
 tools/light-check.mjs samples the light plan at the spots a player stands
