@@ -98,6 +98,13 @@ export function updateRackLeds(racks, elapsed) {
   const blink = Math.sin(elapsed * 9) > 0;
   for (const rack of racks) {
     const mat = rack.led.material;
+    // the presence director borrows the LEDs to run waves down a row
+    if (rack.ledOverride) {
+      mat.color.copy(rack.ledOverride);
+      mat.opacity = 1;
+      mat.transparent = false;
+      continue;
+    }
     if (rack.fault) {
       mat.color.copy(rack.fault.severity === 'critical' ? RED : AMBER);
       mat.opacity = blink ? 1 : 0.15;
