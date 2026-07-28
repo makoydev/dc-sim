@@ -67,6 +67,7 @@ src/textures.js     procedurally drawn materials
 src/audio.js        synthesised hum, pagers, footsteps and night sounds
 src/torch.js        the hand torch and its battery
 src/presence.js     night-shift director — flickers, footsteps, phantom faults
+src/entity.js       the thing that hunts by sound, and its aisle nav graph
 tools/smoke-test.mjs  headless full-shift run
 tools/light-check.mjs samples the light plan at the spots a player stands
 vendor/three/       pinned three.js build, so there is no build step

@@ -134,12 +134,28 @@ Deliberately back to front. Step 3 before step 4 is the whole trick.
 - [x] 2 — hum that drops when cooling zones go down
 - [x] 3 — presence director: flickers, clangs, footsteps, LED waves, phantom
       faults, radio
-- [ ] 4 — the entity
+- [x] 4 — the entity: blind, sound-driven, walks the aisle graph, will not
+      enter containment, kills cooling to make you audible
 - [ ] 5 — the partner
 
 ---
 
-## 9. Later
+## 9. Notes from building it
+
+- **Distance is planar.** It walks the floor; the player's position is eye
+  height. Comparing full 3D distance meant it could never physically reach
+  catch range — it stood on your feet and did nothing.
+- **Repath from the node you are walking to, never the nearest one.** A hunter
+  that repaths twice a second and starts each path from the nearest node turns
+  around before it ever crosses the midpoint between two aisles, and oscillates
+  on the spot forever. It looked like a pathfinding bug; it was a framing bug.
+- **Containment is checked on the player, not the entity.** Keeping the safe
+  zone out of the nav graph entirely is what makes it reliable — it cannot path
+  in, so it cannot glitch in.
+
+---
+
+## 10. Later
 
 - **Co-op.** Two engineers, one ticket queue, one radio. The obvious end state,
   and the reason to keep the sim honest.
