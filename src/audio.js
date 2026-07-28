@@ -225,6 +225,143 @@ export class Audio {
     osc.stop(t + 1.55);
   }
 
+  /**
+   * It is here. Sub drop, a metal shriek dragged down, and a cluster of
+   * dissonant partials that do not belong in a room full of fans.
+   */
+  arrival() {
+    const ctx = this._ensure();
+    const t = ctx.currentTime;
+
+    for (const [freq, detune] of [[52, 0], [52, 11], [78, -7]]) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(freq * 3, t);
+      osc.frequency.exponentialRampToValueAtTime(freq, t + 2.2);
+      osc.detune.value = detune;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.13, t + 0.35);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 3);
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(2600, t);
+      filter.frequency.exponentialRampToValueAtTime(220, t + 3);
+      osc.connect(filter).connect(gain).connect(this.master);
+      osc.start(t);
+      osc.stop(t + 3.1);
+    }
+    this._noise({ duration: 2.6, type: 'bandpass', freq: 3200, q: 3, volume: 0.1, sweepTo: 260 });
+    this._tone(41, 3, 'sine', 0.2);
+  }
+
+  /**
+   * A sustained layer that lives for as long as it is hunting you. Intensity
+   * rises as it closes: the filter opens and the tremolo speeds up.
+   */
+  startChase() {
+    const ctx = this._ensure();
+    if (this.chase) return;
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 1.2);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 260;
+    filter.Q.value = 2.5;
+
+    // tremolo, so it pulses rather than drones
+    const tremolo = ctx.createGain();
+    const lfo = ctx.createOscillator();
+    const lfoGain = ctx.createGain();
+    lfo.frequency.value = 3.4;
+    lfoGain.gain.value = 0.45;
+    lfo.connect(lfoGain).connect(tremolo.gain);
+    tremolo.gain.value = 0.55;
+    lfo.start();
+
+    const oscs = [73.4, 77.8, 146.8].map((freq, i) => {
+      const osc = ctx.createOscillator();
+      osc.type = i === 2 ? 'square' : 'sawtooth';
+      osc.frequency.value = freq;
+      osc.connect(filter);
+      osc.start();
+      return osc;
+    });
+
+    filter.connect(tremolo).connect(gain).connect(this.master);
+    this.chase = { gain, filter, tremolo, lfo, oscs };
+  }
+
+  /** 0 when it is far, 1 when it is on you. */
+  setChaseIntensity(value) {
+    if (!this.chase) return;
+    const v = Math.max(0, Math.min(1, value));
+    const t = this._ensure().currentTime;
+    this.chase.gain.gain.linearRampToValueAtTime(0.05 + v * 0.16, t + 0.3);
+    this.chase.filter.frequency.linearRampToValueAtTime(240 + v * 900, t + 0.3);
+    this.chase.lfo.frequency.linearRampToValueAtTime(2.6 + v * 5.5, t + 0.3);
+  }
+
+  stopChase() {
+    if (!this.chase) return;
+    const { gain, oscs, lfo } = this.chase;
+    const t = this._ensure().currentTime;
+    gain.gain.cancelScheduledValues(t);
+    gain.gain.setValueAtTime(gain.gain.value, t);
+    gain.gain.linearRampToValueAtTime(0.0001, t + 1.4);
+    setTimeout(() => {
+      oscs.forEach((o) => o.stop());
+      lfo.stop();
+    }, 1600);
+    this.chase = null;
+  }
+
+  /** A single thump. The entity drives the rate off how close it is. */
+  heartbeat(strength = 1) {
+    const ctx = this._ensure();
+    const t = ctx.currentTime;
+    for (const [delay, level] of [[0, 0.16], [0.17, 0.11]]) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(72, t + delay);
+      osc.frequency.exponentialRampToValueAtTime(38, t + delay + 0.16);
+      gain.gain.setValueAtTime(0.0001, t + delay);
+      gain.gain.exponentialRampToValueAtTime(level * strength, t + delay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + delay + 0.22);
+      osc.connect(gain).connect(this.master);
+      osc.start(t + delay);
+      osc.stop(t + delay + 0.3);
+    }
+  }
+
+  /** The moment it reaches you. */
+  caught() {
+    this.stopChase();
+    this._noise({ duration: 1.1, type: 'bandpass', freq: 2600, q: 1.2, volume: 0.3, sweepTo: 180 });
+    this._tone(1180, 0.5, 'sawtooth', 0.16);
+    this._tone(1240, 0.5, 'sawtooth', 0.16, 0.02);
+    this.stinger();
+  }
+
+  /** Everything gets duller when you are inside a cabinet with the door shut. */
+  setMuffled(muffled) {
+    const ctx = this._ensure();
+    if (!this.muffle) {
+      this.muffle = ctx.createBiquadFilter();
+      this.muffle.type = 'lowpass';
+      this.muffle.frequency.value = 22000;
+      this.master.disconnect();
+      this.master.connect(this.muffle).connect(ctx.destination);
+    }
+    this.muffle.frequency.linearRampToValueAtTime(
+      muffled ? 480 : 22000, ctx.currentTime + 0.35,
+    );
+  }
+
   /** A fluorescent tube striking, or trying to. */
   ballastBuzz(pan = 0) {
     for (let i = 0; i < 5; i++) {
