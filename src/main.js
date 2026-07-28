@@ -156,6 +156,8 @@ document.addEventListener('player-lock', (e) => {
 
 addEventListener('keydown', (e) => {
   if (e.code === 'Tab') hud.toggleChecklist();
+  // while hidden the crosshair is useless, so E is wired straight to getting out
+  if (e.code === 'KeyE' && !e.repeat && game.hidden) game.exitHiding();
 });
 
 showBriefing();
@@ -194,10 +196,19 @@ function frame() {
   updateFans(fans, dt);
   updateRackLeds(racks, elapsed);
 
+  const hiding = Boolean(game.hidden);
+  interaction.enabled = active && !hiding;
+  hud.setHiding(hiding);
+
   const focus = active && interaction.action ? interaction.target : null;
-  highlighter.setTarget(focus, interaction.action?.disabled);
+  highlighter.setTarget(hiding ? null : focus, interaction.action?.disabled);
   highlighter.update(elapsed);
-  hud.setPrompt(active ? interaction.action : null, interaction.progress);
+  hud.setPrompt(
+    hiding
+      ? { label: 'Come out', hint: 'E' }
+      : active ? interaction.action : null,
+    interaction.progress,
+  );
 
   if (game.phase === 'caught' && !comeToAt) {
     comeToAt = elapsed + 5;

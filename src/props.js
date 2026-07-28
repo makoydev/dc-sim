@@ -327,6 +327,110 @@ export function buildProps(scene) {
     addCollider(-11.4, -9.6, 0.9, 0.6);
   }
 
+  // ---- places to get inside or under ---------------------------------------
+
+  /**
+   * `hide` describes where the camera goes and which way it may look: inside a
+   * cabinet you get a slot of vision and nothing else.
+   */
+  const hideSpot = (station, hide) => {
+    station.hide = hide;
+    return add(station, hide.root);
+  };
+
+  // tall storage cabinets, west wall and south-east corner
+  for (const [x, z, ry, label] of [
+    [-12.2, 6.4, Math.PI / 2, 'Storage Cabinet'],
+    [11.7, 9.4, -Math.PI / 2, 'Storage Cabinet'],
+  ]) {
+    const g = new THREE.Group();
+    g.position.set(x, 0, z);
+    g.rotation.y = ry;
+    scene.add(g);
+
+    const body = box(g, 1.0, 2.05, 0.66, 0, 1.02, 0, MAT.case);
+    box(g, 1.04, 0.06, 0.7, 0, 2.06, 0, MAT.trim);
+    for (const side of [-1, 1]) {
+      const door = box(g, 0.48, 1.9, 0.04, side * 0.25, 1.02, 0.34, MAT.darkCase);
+      door.material = MAT.trim;
+      const handle = box(g, 0.03, 0.22, 0.04, side * 0.04, 1.02, 0.38, MAT.darkCase);
+      handle.material = MAT.case;
+    }
+    // louvres, so it reads as a cabinet rather than a block
+    for (let i = 0; i < 6; i++) {
+      box(g, 0.86, 0.02, 0.02, 0, 1.72 - i * 0.09, 0.37, MAT.darkCase);
+    }
+
+    const inward = new THREE.Vector3(Math.sin(ry + Math.PI), 0, Math.cos(ry + Math.PI));
+    hideSpot(
+      {
+        id: `HIDE-CAB-${z > 0 && x > 0 ? 'E' : 'W'}`,
+        kind: 'hide',
+        label,
+        position: new THREE.Vector3(x, 1.1, z),
+        mesh: body,
+      },
+      {
+        root: g,
+        under: false,
+        // stand inside it, looking out through the doors
+        camera: new THREE.Vector3(x, 1.24, z),
+        exit: new THREE.Vector3(x, 0, z).addScaledVector(inward, -1.15),
+        yaw: ry + Math.PI / 2,
+        arc: 0.75,
+      },
+    );
+    addCollider(x, z, ry === 0 ? 1.0 : 0.66, ry === 0 ? 0.66 : 1.0);
+  }
+
+  // workbenches you can get under
+  for (const [bx, bz, bry, exitX, exitZ, id] of [
+    [-7.6, -10.1, 0, -7.6, -9.0, 'HIDE-BENCH-W'],
+    [9.6, 3.4, Math.PI / 2, 8.4, 3.4, 'HIDE-BENCH-E'],
+  ]) {
+    const g = new THREE.Group();
+    g.position.set(bx, 0, bz);
+    g.rotation.y = bry;
+    scene.add(g);
+    box(g, 2.2, 0.08, 0.85, 0, 0.92, 0, MAT.trim);
+    for (const x of [-1.0, 1.0]) {
+      box(g, 0.08, 0.92, 0.08, x, 0.46, -0.35, MAT.case);
+      box(g, 0.08, 0.92, 0.08, x, 0.46, 0.35, MAT.case);
+    }
+    box(g, 2.0, 0.05, 0.7, 0, 0.28, 0, MAT.case); // lower shelf
+    // clutter on top
+    box(g, 0.3, 0.14, 0.22, -0.6, 1.03, 0, MAT.darkCase);
+    box(g, 0.22, 0.1, 0.16, 0.5, 1.01, 0.1, MAT.case);
+    const spool = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.14, 0.14, 0.1, 12),
+      new THREE.MeshStandardMaterial({ color: 0x2f7ad6, roughness: 0.8 }),
+    );
+    spool.rotation.x = Math.PI / 2;
+    spool.position.set(0.05, 1.01, -0.1);
+    g.add(spool);
+
+    hideSpot(
+      {
+        id,
+        kind: 'hide',
+        label: 'Workbench',
+        position: new THREE.Vector3(bx, 1.0, bz),
+        mesh: g.children[0],
+      },
+      {
+        root: g,
+        under: true,
+        camera: new THREE.Vector3(bx, 0.62, bz).lerp(
+          new THREE.Vector3(exitX, 0.62, exitZ), 0.12,
+        ),
+        exit: new THREE.Vector3(exitX, 0, exitZ),
+        yaw: bry === 0 ? Math.PI : Math.PI / 2,
+        arc: 1.0,
+      },
+    );
+    addCollider(bx, bz, bry === 0 ? 2.2 : 0.85, bry === 0 ? 0.85 : 2.2);
+  }
+
   return { stations, fans, screens };
 }
 

@@ -238,6 +238,18 @@ html, body {
 }
 #stamina div { height: 100%; width: 100%; background: var(--accent); transition: width 0.1s linear; }
 
+/* ---- hiding ------------------------------------------------------------- */
+#hiding {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  background:
+    linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0) 26%, rgba(0, 0, 0, 0) 74%, #000 100%),
+    radial-gradient(ellipse 62% 48% at 50% 50%, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.94) 100%);
+}
+#hiding.on { opacity: 1; }
+
 /* ---- objective marker --------------------------------------------------- */
 #marker {
   position: absolute;

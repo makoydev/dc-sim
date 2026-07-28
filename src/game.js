@@ -29,10 +29,13 @@ export class Game {
     this.mode = 'day';
     this.noise = 0;
     this.entityGraceUntil = 0;
+    this.hidden = null;
+    this.hideCooldown = 0;
 
     if (entity) {
       entity.onCatch = () => this.playerCaught();
       entity.onSabotage = (from) => this.entitySabotage(from);
+      entity.isPlayerHidden = () => Boolean(this.hidden);
     }
 
     this.byKind = (kind) => this.stations.filter((s) => s.kind === kind);
@@ -192,6 +195,7 @@ export class Game {
   /** Anything the player does that makes a sound. */
   emitNoise(loudness, position = this.player.position) {
     if (this.mode !== 'night' || this.phase !== 'running') return;
+    if (this.hidden && position === this.player.position) return; // you are still
     const carried = loudness * (1 - this.masking);
     this.noise = Math.min(1, Math.max(this.noise, carried * 1.6));
     this.entity?.hear(carried, position.clone());
@@ -211,6 +215,58 @@ export class Game {
     this.audio?.stinger();
   }
 
+  // ---- hiding --------------------------------------------------------------
+
+  _hideAction(station) {
+    if (this.hidden) return null;
+    if (this.mode !== 'night') {
+      return { label: station.label, hint: 'Nothing worth hiding from today', disabled: true };
+    }
+    if (this.time < this.hideCooldown) {
+      return { label: station.label, hint: 'Not yet', disabled: true };
+    }
+    return {
+      label: `Hide ${station.hide.under ? 'under' : 'inside'} the ${station.label.toLowerCase()}`,
+      hint: 'E again to come out',
+      holdTime: 0.6,
+      run: () => this.enterHiding(station),
+    };
+  }
+
+  enterHiding(station) {
+    if (this.hidden) return;
+    const { camera, yaw, arc } = station.hide;
+    this.hidden = station;
+    this.stashedY = this.player.position.y;
+    this.player.frozen = true;
+    this.player.position.copy(camera);
+    this.player.yaw = yaw;
+    this.player.pitch = 0;
+    this.player.lookArc = { center: yaw, range: arc };
+    this.audio?.setMuffled(true);
+    this.hud.say(
+      station.hide.under
+        ? 'You get under it. Your own breathing is very loud.'
+        : 'You pull the door to. Your own breathing is very loud.',
+      'warn',
+    );
+    // the door, the scrape of your boots: hiding late is not free
+    this.emitNoise(0.34, station.position);
+  }
+
+  exitHiding() {
+    if (!this.hidden) return;
+    const station = this.hidden;
+    this.hidden = null;
+    this.hideCooldown = this.time + 1.2;
+    this.player.frozen = false;
+    this.player.lookArc = null;
+    this.player.position.copy(station.hide.exit);
+    this.player.position.y = this.stashedY ?? 1.68;
+    this.audio?.setMuffled(false);
+    this.emitNoise(0.34, station.position);
+  }
+
   /** §6: you lose an hour, not the session. */
   playerCaught() {
     if (this.phase !== 'running') return;
@@ -224,6 +280,7 @@ export class Game {
     for (const rack of this.racks) rack.temp += 2.5;
     this.carrying = null;
     this.entityGraceUntil = this.time + 75;
+    this.exitHiding();
   }
 
   /** Called once the come-to overlay has played out. */
@@ -385,6 +442,8 @@ export class Game {
         return this._coffeeAction(station);
       case 'noc':
         return this._nocAction(station);
+      case 'hide':
+        return this._hideAction(station);
       default:
         return null;
     }

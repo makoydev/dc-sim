@@ -21,6 +21,8 @@ export class Player {
     this.bob = 0;
     this.stamina = 1;
     this.speedScale = 1;
+    this.frozen = false;
+    this.lookArc = null; // {center, range} while hidden
     this.onFootstep = null;
 
     this._bind();
@@ -43,8 +45,19 @@ export class Player {
       this.pitch -= e.movementY * this.sensitivity;
       const limit = Math.PI / 2 - 0.05;
       this.pitch = Math.max(-limit, Math.min(limit, this.pitch));
+
+      // inside a cabinet you only get the slot between the doors
+      if (this.lookArc) {
+        const { center, range } = this.lookArc;
+        let delta = this.yaw - center;
+        while (delta > Math.PI) delta -= Math.PI * 2;
+        while (delta < -Math.PI) delta += Math.PI * 2;
+        this.yaw = center + Math.max(-range, Math.min(range, delta));
+        this.pitch = Math.max(-0.5, Math.min(0.5, this.pitch));
+      }
     });
     addEventListener('keydown', (e) => {
+      if (this.frozen && ['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) return;
       this.keys.add(e.code);
       if (['Tab', 'Space'].includes(e.code)) e.preventDefault();
     });
@@ -60,6 +73,12 @@ export class Player {
   }
 
   update(dt) {
+    if (this.frozen) {
+      this.velocity.set(0, 0, 0);
+      this.stamina = Math.min(1, this.stamina + dt * 0.3);
+      this._apply();
+      return;
+    }
     const forward = Number(this.keys.has('KeyW')) - Number(this.keys.has('KeyS'));
     const strafe = Number(this.keys.has('KeyD')) - Number(this.keys.has('KeyA'));
 
