@@ -18,6 +18,7 @@ const MAT = {
 };
 
 const HIT_MAT = new THREE.MeshBasicMaterial({ visible: false });
+const BLADE_GEO = new THREE.BoxGeometry(0.34, 0.07, 0.02);
 
 function box(parent, w, h, d, x, y, z, mat = MAT.case) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
@@ -85,17 +86,17 @@ export function buildProps(scene) {
       hub.rotation.x = Math.PI / 2;
       hub.position.set(fx, 1.15, 0.62);
       g.add(hub);
-      const blades = new THREE.Group();
+      // five blades as one instanced draw call rather than five meshes
+      const blades = new THREE.InstancedMesh(BLADE_GEO, MAT.trim, 5);
       blades.position.set(fx, 1.15, 0.6);
+      const m = new THREE.Matrix4();
       for (let b = 0; b < 5; b++) {
-        const blade = new THREE.Mesh(
-          new THREE.BoxGeometry(0.34, 0.07, 0.02),
-          MAT.trim,
-        );
-        blade.position.set(Math.cos((b / 5) * Math.PI * 2) * 0.17, Math.sin((b / 5) * Math.PI * 2) * 0.17, 0);
-        blade.rotation.z = (b / 5) * Math.PI * 2;
-        blades.add(blade);
+        const angle = (b / 5) * Math.PI * 2;
+        m.makeRotationZ(angle);
+        m.setPosition(Math.cos(angle) * 0.17, Math.sin(angle) * 0.17, 0);
+        blades.setMatrixAt(b, m);
       }
+      blades.instanceMatrix.needsUpdate = true;
       g.add(blades);
       fans.push({ mesh: blades, speed: 6 });
     }
