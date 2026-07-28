@@ -4,6 +4,7 @@ import { buildRacks, updateRackLeds } from './racks.js';
 import { Player } from './player.js';
 import { buildProps, updateFans } from './props.js';
 import { Interaction } from './interaction.js';
+import { Highlighter } from './highlight.js';
 import { HUD } from './ui.js';
 import { Audio } from './audio.js';
 import { Game } from './game.js';
@@ -30,6 +31,7 @@ const hud = new HUD(document.getElementById('ui'));
 const audio = new Audio();
 const game = new Game({ scene, camera, player, racks, stations, hud, audio });
 const interaction = new Interaction(camera, scene, (target) => game.resolveAction(target));
+const highlighter = new Highlighter(scene);
 
 player.onFootstep = (sprinting) => audio.footstep(sprinting);
 
@@ -139,6 +141,10 @@ function frame() {
 
   updateFans(fans, dt);
   updateRackLeds(racks, elapsed);
+
+  const focus = active && interaction.action ? interaction.target : null;
+  highlighter.setTarget(focus, interaction.action?.disabled);
+  highlighter.update(elapsed);
   hud.setPrompt(active ? interaction.action : null, interaction.progress);
 
   if (game.phase === 'report' && !reported) {
