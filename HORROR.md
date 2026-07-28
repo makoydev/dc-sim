@@ -47,6 +47,11 @@ minutes; fear of a thing whose rules you understand and might still get wrong
 lasts the whole shift.
 
 - **It is blind. It hunts sound.** The hall's fan noise is your cover.
+- **Close range is not a hearing problem.** Once it is within nine metres and
+  already hunting, it has you: it re-paths onto your position every 0.4 s and
+  freezing does nothing. Standing still is a tactic at distance, not in its lap.
+- **You are never silent.** Breathing carries a little every 1.3 seconds, so a
+  player who simply stops moving is quieter, not absent.
 - **When a CRAC trips, that zone goes quiet** — and you become audible in it.
   A cooling failure now means heat *and* exposure. One existing system, two
   meanings; this is the centre of the design.
@@ -209,6 +214,17 @@ heating. That is deliberate — see §2.
 
 ## 10. Notes from building it
 
+- **A blind hunter still needs to hunt.** The first version reacted only to
+  noise events, so a player who stopped walking stopped existing — it would
+  halt two metres away and lose interest, which read as broken rather than
+  merciful. Lock-on inside nine metres plus a constant breathing emit fixed it,
+  and both are now covered by tests that fail if freezing ever works up close.
+- **Investigating should be a search.** It used to walk to the last sound and
+  stand on the spot. It now casts around nodes within 6.5 m of it.
+- **It cannot arrive late.** At 22% of the shift it turned up around three
+  minutes in, by which time the player has done a lap of the racks and the
+  dread has worn off. It now arrives just under a minute in, and the test
+  fails if that ever slips past 90 seconds.
 - **Distance is planar.** It walks the floor; the player's position is eye
   height. Comparing full 3D distance meant it could never physically reach
   catch range — it stood on your feet and did nothing.
