@@ -63,12 +63,15 @@ globalThis.requestAnimationFrame = (cb) => setTimeout(cb, 16);
 
 // ---- build the hall --------------------------------------------------------
 
-const THREE = await import('../vendor/three/three.module.js');
+const THREE = await import('three'); // same pinned build as vendor/, single instance
 const { buildHall } = await import('../src/world.js');
 const { buildRacks, updateRackLeds } = await import('../src/racks.js');
 const { buildProps, updateFans } = await import('../src/props.js');
 const { Player } = await import('../src/player.js');
 const { Game } = await import('../src/game.js');
+const { Interaction } = await import('../src/interaction.js');
+const { Highlighter } = await import('../src/highlight.js');
+const { pickables } = await import('../src/pickables.js');
 
 const noop = () => {};
 const hud = {
@@ -83,6 +86,63 @@ const racks = buildRacks(scene);
 const { stations, fans } = buildProps(scene);
 const player = new Player(camera, makeElement('canvas'));
 const game = new Game({ scene, camera, player, racks, stations, hud, audio: null });
+
+// ---- crosshair picking -----------------------------------------------------
+
+const fail = (msg) => {
+  console.error('SMOKE TEST FAILED:', msg);
+  process.exit(1);
+};
+
+const interaction = new Interaction(camera, scene, (t) => game.resolveAction(t));
+const highlighter = new Highlighter(scene);
+
+// the renderer normally does this every frame; there is no renderer here
+scene.updateMatrixWorld(true);
+
+function lookFrom(x, y, z, at) {
+  camera.position.set(x, y, z);
+  camera.lookAt(at.x, y, at.z);
+  camera.updateMatrixWorld(true);
+  return interaction._pick();
+}
+
+{
+  if (pickables.length < 80) fail(`pickable list looks wrong: ${pickables.length}`);
+
+  const rack = racks[10];
+  const picked = lookFrom(rack.frontSpot.x, 1.6, rack.frontSpot.z, rack.group.position);
+  if (picked !== rack) fail(`looking at rack ${rack.id} picked ${picked?.id ?? 'nothing'}`);
+
+  const crac = stations.find((s) => s.kind === 'crac');
+  const atCrac = lookFrom(crac.position.x - 2, 1.4, crac.position.z, crac.position);
+  if (atCrac !== crac) fail(`looking at ${crac.label} picked ${atCrac?.label ?? 'nothing'}`);
+
+  const spares = stations.find((s) => s.kind === 'spares');
+  const atShelf = lookFrom(spares.position.x, 1.4, spares.position.z - 1.8, spares.position);
+  if (atShelf !== spares) fail('looking at the spares cage picked nothing');
+
+  // a wall between you and a prop must block the pick
+  const throughWall = lookFrom(crac.position.x + 3, 1.4, crac.position.z, crac.position);
+  if (throughWall) fail('picked a station through the hall wall');
+
+  // and empty floor in the middle of a cold aisle resolves to nothing
+  if (lookFrom(0, 1.6, -3.7, { x: 0, z: 0 }) === undefined) fail('pick returned undefined');
+
+  for (const target of [rack, crac, spares]) {
+    highlighter.setTarget(target, false);
+    const s = highlighter.lines.scale;
+    if (!highlighter.lines.visible) fail('highlight did not become visible');
+    if ([s.x, s.y, s.z].some((v) => !Number.isFinite(v) || v <= 0)) {
+      fail(`highlight bounds are wrong: ${s.x},${s.y},${s.z}`);
+    }
+  }
+  highlighter.setTarget(null);
+  if (highlighter.lines.visible) fail('highlight did not clear');
+  let sceneObjects = 0;
+  scene.traverse(() => sceneObjects++);
+  console.log(`picking OK · ${pickables.length} pickable meshes of ${sceneObjects} scene objects`);
+}
 
 // ---- run a shift -----------------------------------------------------------
 
@@ -134,11 +194,6 @@ const report = game.report;
 console.log(`actions run: ${ran} · prompts refused: ${refused}`);
 console.log(`tasks generated: ${game.tasks.length} · hall avg ${game.hallTemp.toFixed(1)}C`);
 console.log('report:', JSON.stringify(report));
-
-const fail = (msg) => {
-  console.error('SMOKE TEST FAILED:', msg);
-  process.exit(1);
-};
 
 if (!report) fail('shift never produced a report');
 if (report.total < 4) fail('routine checklist was not populated');
