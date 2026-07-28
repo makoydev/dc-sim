@@ -10,11 +10,12 @@ import {
 
 const SHIFT_SECONDS = 780; // 08:00 -> 20:00
 const SHIFT_START_HOUR = 8;
+const NIGHT_START_HOUR = 22; // 22:00 -> 10:00, though nobody stays that long
 const SHIFT_HOURS = 12;
 const INCIDENT_GAP = [55, 105];
 
 export class Game {
-  constructor({ scene, camera, player, racks, stations, hud, audio }) {
+  constructor({ scene, camera, player, racks, stations, hud, audio, presence }) {
     this.scene = scene;
     this.camera = camera;
     this.player = player;
@@ -22,6 +23,8 @@ export class Game {
     this.stations = stations;
     this.hud = hud;
     this.audio = audio;
+    this.presence = presence;
+    this.mode = 'day';
 
     this.byKind = (kind) => this.stations.filter((s) => s.kind === kind);
     this.noc = stations.find((s) => s.kind === 'noc');
@@ -39,6 +42,7 @@ export class Game {
     this.nextIncidentAt = 30;
     this.handoverAdded = false;
     this._screenAcc = 0;
+    this._humLevel = 1;
 
     // each rack is cooled by whichever CRAC sits closest along the hall
     for (const rack of this.racks) {
@@ -53,20 +57,31 @@ export class Game {
 
   // ---- lifecycle -----------------------------------------------------------
 
-  start() {
+  start(mode = 'day') {
+    this.mode = mode;
     this.phase = 'running';
     this.time = 0;
     this.tasks = createRoutineTasks(this.stations);
     this.nextIncidentAt = 30;
-    this.hud.say('Shift started. Badge in, coffee, then rounds.', 'good');
+    this.hud.say(
+      mode === 'night'
+        ? 'Nights. Ramos took the genset walk. Work the list.'
+        : 'Shift started. Badge in, coffee, then rounds.',
+      mode === 'night' ? 'warn' : 'good',
+    );
     this.audio?.startAmbience();
   }
 
   get clockText() {
-    const hours = SHIFT_START_HOUR + (this.time / SHIFT_SECONDS) * SHIFT_HOURS;
-    const h = Math.floor(hours);
-    const m = Math.floor((hours - h) * 60);
+    const start = this.mode === 'night' ? NIGHT_START_HOUR : SHIFT_START_HOUR;
+    const hours = start + (this.time / SHIFT_SECONDS) * SHIFT_HOURS;
+    const h = Math.floor(hours) % 24;
+    const m = Math.floor((hours - Math.floor(hours)) * 60);
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
+
+  get progress() {
+    return this.time / SHIFT_SECONDS;
   }
 
   get openTasks() {
@@ -86,6 +101,8 @@ export class Game {
     this._updateDeadlines();
     this._updateUptime(dt);
     this._updateScreens(dt);
+    this._updateHum();
+    if (this.mode === 'night') this.presence?.update(dt, this.progress);
     this._refreshHud();
 
     if (this.time >= SHIFT_SECONDS) this.endShift('clock');
@@ -136,6 +153,23 @@ export class Game {
     this.hallTemp = sum / this.racks.length;
     this.hotRacks = hot;
     if (hot > 0) this.stats.hotMinutes += dt / 60;
+  }
+
+  /**
+   * The fan wall is the hall's voice. When cooling drops the hum drops with
+   * it — on nights, that silence is the loudest thing in the game.
+   */
+  _updateHum() {
+    const cracs = this.byKind('crac');
+    const running = cracs.filter((c) => c.running && !c.filterClogged).length;
+    const level = cracs.length ? running / cracs.length : 1;
+    if (level !== this._humLevel) {
+      this._humLevel = level;
+      this.audio?.setHum(level);
+      if (this.mode === 'night' && level < 1) {
+        this.hud.say('The fans wind down. You can hear the room now.', 'warn');
+      }
+    }
   }
 
   _updateDeadlines() {

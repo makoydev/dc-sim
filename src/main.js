@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildHall } from './world.js';
+import { buildHall, setLightingMode } from './world.js';
 import { buildRacks, updateRackLeds } from './racks.js';
 import { Player } from './player.js';
 import { buildProps, updateFans } from './props.js';
@@ -8,6 +8,8 @@ import { Highlighter } from './highlight.js';
 import { HUD } from './ui.js';
 import { Audio } from './audio.js';
 import { Game } from './game.js';
+import { Torch } from './torch.js';
+import { Presence } from './presence.js';
 
 const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -30,7 +32,9 @@ const player = new Player(camera, canvas);
 
 const hud = new HUD(document.getElementById('ui'));
 const audio = new Audio();
-const game = new Game({ scene, camera, player, racks, stations, hud, audio });
+const torch = new Torch(camera, scene);
+const presence = new Presence({ camera, player, racks, hud, audio });
+const game = new Game({ scene, camera, player, racks, stations, hud, audio, presence });
 const interaction = new Interaction(camera, scene, (target) => game.resolveAction(target));
 const highlighter = new Highlighter(scene);
 
@@ -54,28 +58,43 @@ const CONTROLS = `
     <b>Mouse</b><span>look around</span>
     <b>Shift</b><span>sprint (costs stamina)</span>
     <b>E</b><span>interact — hold for longer jobs</span>
+    <b>F</b><span>torch (nights only — the battery is finite)</span>
     <b>Tab</b><span>show / hide the checklist</span>
     <b>Esc</b><span>pause</span>
   </div>`;
 
+function beginShift(mode) {
+  hud.hideOverlay();
+  audio.resume();
+  setLightingMode(mode);
+  scene.fog = mode === 'night'
+    ? new THREE.Fog(0x03050a, 6, 34)
+    : new THREE.Fog(0x0a121a, 26, 80);
+  renderer.toneMappingExposure = mode === 'night' ? 1.0 : 1.14;
+  torch.on = mode === 'night';
+  game.start(mode);
+  canvas.requestPointerLock();
+}
+
 function showBriefing() {
   hud.showOverlay(
     `<h1>Uptime</h1>
-     <h2>Data hall 3 &middot; day shift &middot; 08:00 &ndash; 20:00</h2>
+     <h2>Data hall 3 &middot; pick your shift</h2>
      <p>You are the engineer on the floor. Work the checklist, answer the tickets
      that page you during the shift, and keep the SLA above 99.9%.</p>
      <p class="dim">Failed drives, clogged filters and tripped breakers all cost
      uptime while they sit open. Parts live in the spares cage; dead hardware
      goes in the e-waste bin.</p>
      ${CONTROLS}
-     <button id="begin">Clock in</button>`,
+     <div class="choices">
+       <button id="day">Day shift &middot; 08:00</button>
+       <button id="night" class="ghost">Night shift &middot; 22:00</button>
+     </div>
+     <p class="dim small">Nights: the hall runs on emergency lighting and you
+     work by torch. Ramos is on the genset walk. He will not be answering.</p>`,
     (root) => {
-      root.querySelector('#begin').addEventListener('click', () => {
-        hud.hideOverlay();
-        audio.resume();
-        game.start();
-        canvas.requestPointerLock();
-      });
+      root.querySelector('#day').addEventListener('click', () => beginShift('day'));
+      root.querySelector('#night').addEventListener('click', () => beginShift('night'));
     },
   );
 }
@@ -138,6 +157,8 @@ function frame() {
     player.update(dt);
     interaction.update(dt);
     game.update(dt);
+    torch.update(dt, player.velocity.length());
+    hud.setTorch(game.mode === 'night' ? torch : null);
   }
 
   updateFans(fans, dt);
