@@ -56,6 +56,7 @@ src/screen.js       canvas-backed in-world displays
 src/textures.js     procedurally drawn materials
 src/audio.js        synthesised hum, pagers and footsteps
 tools/smoke-test.mjs  headless full-shift run
+tools/light-check.mjs samples the light plan at the spots a player stands
 vendor/three/       pinned three.js build, so there is no build step
 ```
 
@@ -69,6 +70,14 @@ Builds the entire hall under a stubbed DOM — no WebGL, no browser — checks t
 the crosshair picks the right hardware (and refuses to pick through walls),
 plays a whole shift, fires every reachable interaction, and asserts the result
 is sane. It catches logic errors, not rendering ones.
+
+```bash
+npm run lights
+```
+
+Samples the hall's light plan at the spots a player actually stands — the CRAC
+faces, the UPS bank, the aisles — and fails if the working areas end up more
+than 4x apart. Useful for judging a lighting change without a screenshot.
 
 ## What's next
 
