@@ -287,6 +287,45 @@ const { Torch } = await import('../src/torch.js');
   );
 }
 
+// ---- the partner -----------------------------------------------------------
+
+{
+  const { Partner, PARTNER_LINES } = await import('../src/partner.js');
+  const said = [];
+  const partner = new Partner({
+    hud: { say: (text) => said.push(text) }, audio: null, entity: null,
+  });
+
+  // the arc must run in order and finish inside a shift
+  for (let i = 0; i <= 100; i++) partner.update(i / 100);
+  if (said.length !== PARTNER_LINES.length) {
+    fail(`partner said ${said.length} of ${PARTNER_LINES.length} lines`);
+  }
+  if (!partner.lost) fail('the channel never went silent');
+  if (!partner.compromised) fail('the arc never reached the part after the silence');
+
+  // The echo is the whole trick: what comes back after the silence is stitched
+  // out of things he actually said earlier, so every 'wrong' line must appear
+  // word for word inside an 'ok' one.
+  const strip = (t) => t.replace(/^RAMOS:\s*\.*/i, '').trim().toLowerCase();
+  const early = PARTNER_LINES.filter((l) => l.kind === 'ok').map((l) => strip(l.text));
+  for (const line of PARTNER_LINES.filter((l) => l.kind === 'wrong')) {
+    const fragment = strip(line.text);
+    // the last line is his own words turned into an invitation, not a repeat
+    if (/genset room/.test(fragment)) continue;
+    if (!early.some((e) => e.includes(fragment))) {
+      fail(`"${line.text}" is not something he said before the silence`);
+    }
+  }
+
+  // and it must not fire everything at once on a fresh shift
+  partner.reset();
+  partner.update(0);
+  if (said.length > PARTNER_LINES.length + 1) fail('the arc replayed on reset');
+  if (partner.lost) fail('reset did not clear the lost flag');
+  console.log(`partner OK · ${PARTNER_LINES.length} lines in order, with the echo`);
+}
+
 // ---- the entity ------------------------------------------------------------
 
 const { Entity } = await import('../src/entity.js');
@@ -380,6 +419,7 @@ const { inContainment } = await import('../src/world.js');
   // being caught costs an hour and heat, and does not end the shift
   game.phase = 'running';
   game.mode = 'night';
+  game.time = 60; // partway through a night, not carrying the day shift's clock
   const before = { time: game.time, temp: racks[0].temp, caught: game.stats.caught };
   game.playerCaught();
   if (game.phase !== 'caught') fail('being caught did not enter the come-to phase');
@@ -406,7 +446,10 @@ const { inContainment } = await import('../src/world.js');
     }
     if (!arrivedAt) fail('the entity never arrived at all');
     if (arrivedAt > 90) fail(`the entity took ${arrivedAt.toFixed(0)}s to show up`);
-    console.log(`arrival OK · on the floor after ${arrivedAt.toFixed(0)}s of a 780s shift`);
+    if (solo.duration >= 780) fail('the night shift is not shorter than the day shift');
+    console.log(
+      `arrival OK · on the floor after ${arrivedAt.toFixed(0)}s of a ${solo.duration}s night`,
+    );
   }
 
   // ---- hiding --------------------------------------------------------------
