@@ -21,8 +21,15 @@ The game needs to be served over HTTP (ES modules + import maps); opening
 | Mouse | Look (click the canvas to capture the pointer) |
 | `Shift` | Sprint |
 | `E` | Interact |
+| `F` | Torch (night shift) |
 | `Tab` | Toggle checklist |
 | `Esc` | Release pointer |
+
+## Two shifts
+
+**Day** is the working hall described below. **Night** is the same hall at
+22:00 on emergency lighting, worked by torch, with something that may or may
+not be on the floor with you — see [HORROR.md](./HORROR.md).
 
 ## The shift
 
@@ -54,7 +61,9 @@ src/tasks.js        checklist definitions and incident rolls
 src/ui.js           HUD
 src/screen.js       canvas-backed in-world displays
 src/textures.js     procedurally drawn materials
-src/audio.js        synthesised hum, pagers and footsteps
+src/audio.js        synthesised hum, pagers, footsteps and night sounds
+src/torch.js        the hand torch and its battery
+src/presence.js     night-shift director — flickers, footsteps, phantom faults
 tools/smoke-test.mjs  headless full-shift run
 tools/light-check.mjs samples the light plan at the spots a player stands
 vendor/three/       pinned three.js build, so there is no build step
