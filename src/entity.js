@@ -82,43 +82,134 @@ export class Entity {
     scene.add(this.group);
   }
 
+  /**
+   * Proportions do the work: two and a half metres of it, shoulders narrower
+   * than a person's, forearms that hang past the knees, and knees that bend the
+   * wrong way. Slightly glossy rather than matte, so the torch finds an edge of
+   * it before you can make out the shape.
+   */
   _buildModel() {
     const group = new THREE.Group();
-    // near-black, high roughness: it holds shape in torchlight and vanishes
-    // completely outside it
     const skin = new THREE.MeshStandardMaterial({
-      color: 0x05070a,
-      roughness: 1,
-      metalness: 0,
+      color: 0x06080b,
+      roughness: 0.36,
+      metalness: 0.08,
     });
+    const limb = (radius, length) =>
+      new THREE.Mesh(new THREE.CapsuleGeometry(radius, length, 4, 8), skin);
 
-    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 1.15, 4, 10), skin);
-    torso.position.y = 1.28;
-    group.add(torso);
+    const pelvis = new THREE.Group();
+    pelvis.position.y = 1.12;
+    group.add(pelvis);
 
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 10), skin);
-    head.position.y = 2.06;
-    head.scale.set(1, 1.25, 0.9);
-    group.add(head);
+    // hunched, so the head leads
+    const spine = new THREE.Group();
+    spine.rotation.x = 0.26;
+    pelvis.add(spine);
 
+    const torso = limb(0.145, 0.72);
+    torso.position.y = 0.4;
+    torso.scale.z = 0.7; // flattened front to back
+    spine.add(torso);
+
+    const neck = limb(0.05, 0.22);
+    neck.position.y = 0.86;
+    spine.add(neck);
+
+    const head = new THREE.Group();
+    head.position.y = 1.02;
+    spine.add(head);
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 12), skin);
+    skull.scale.set(0.82, 1.45, 0.86);
+    head.add(skull);
+    const jaw = limb(0.05, 0.16);
+    jaw.position.set(0, -0.11, 0.06);
+    jaw.rotation.x = 0.5;
+    head.add(jaw);
+
+    // no face. these are only where the light gets caught
+    const glintMat = new THREE.MeshBasicMaterial({ color: 0x4a1418, toneMapped: false });
+    const glints = [];
     for (const side of [-1, 1]) {
-      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.075, 1.0, 4, 8), skin);
-      arm.position.set(side * 0.3, 1.3, 0);
-      arm.rotation.z = side * 0.07;
-      group.add(arm);
-      const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.85, 4, 8), skin);
-      leg.position.set(side * 0.13, 0.45, 0);
-      group.add(leg);
+      const glint = new THREE.Mesh(new THREE.SphereGeometry(0.026, 7, 7), glintMat);
+      glint.position.set(side * 0.052, 0.05, 0.1);
+      head.add(glint);
+      glints.push(glint);
     }
 
-    // it has no eyes; these are just where the light gets caught
-    const glintMat = new THREE.MeshBasicMaterial({ color: 0x3a1114, toneMapped: false });
+    const arms = [];
+    const legs = [];
     for (const side of [-1, 1]) {
-      const glint = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 6), glintMat);
-      glint.position.set(side * 0.06, 2.08, 0.14);
-      group.add(glint);
+      const shoulder = new THREE.Group();
+      shoulder.position.set(side * 0.15, 0.74, 0);
+      spine.add(shoulder);
+      const upper = limb(0.05, 0.52);
+      upper.position.y = -0.26;
+      shoulder.add(upper);
+      const elbow = new THREE.Group();
+      elbow.position.y = -0.52;
+      shoulder.add(elbow);
+      const fore = limb(0.042, 0.62);
+      fore.position.y = -0.31;
+      elbow.add(fore);
+      const hand = limb(0.035, 0.16);
+      hand.position.y = -0.66;
+      elbow.add(hand);
+      arms.push({ shoulder, elbow });
+
+      const hip = new THREE.Group();
+      hip.position.set(side * 0.09, 0, 0);
+      pelvis.add(hip);
+      const thigh = limb(0.062, 0.46);
+      thigh.position.y = -0.25;
+      hip.add(thigh);
+      const knee = new THREE.Group();
+      knee.position.y = -0.5;
+      knee.rotation.x = -0.5; // backwards, like a bird's
+      hip.add(knee);
+      const shin = limb(0.05, 0.44);
+      shin.position.y = -0.24;
+      knee.add(shin);
+      const foot = limb(0.045, 0.2);
+      foot.position.set(0, -0.48, 0.06);
+      foot.rotation.x = 1.3;
+      knee.add(foot);
+      legs.push({ hip, knee });
     }
+
+    this.parts = { pelvis, spine, head, glints, glintMat, arms, legs };
+    this.gait = 0;
     return group;
+  }
+
+  /**
+   * A figure sliding along the floor reads as a bug. Give it a walk and it
+   * reads as something walking towards you.
+   */
+  _animate(dt, speed) {
+    const { pelvis, spine, head, glintMat, arms, legs } = this.parts;
+    const chasing = this.state === 'chase';
+    this.gait += speed * dt * 2.1;
+
+    const swing = Math.sin(this.gait);
+    const counter = Math.sin(this.gait + Math.PI);
+    legs[0].hip.rotation.x = swing * 0.5;
+    legs[1].hip.rotation.x = counter * 0.5;
+    legs[0].knee.rotation.x = -0.5 - Math.max(0, -swing) * 0.6;
+    legs[1].knee.rotation.x = -0.5 - Math.max(0, -counter) * 0.6;
+    arms[0].shoulder.rotation.x = counter * 0.34;
+    arms[1].shoulder.rotation.x = swing * 0.34;
+    arms[0].elbow.rotation.x = -0.15 - Math.abs(counter) * 0.2;
+    arms[1].elbow.rotation.x = -0.15 - Math.abs(swing) * 0.2;
+
+    // it leans into a chase, and the head never quite sits straight
+    spine.rotation.x += ((chasing ? 0.46 : 0.26) - spine.rotation.x) * Math.min(1, dt * 2);
+    head.rotation.z = Math.sin(this.gait * 0.37) * 0.16;
+    head.rotation.x = Math.sin(this.gait * 0.21) * 0.1 - (chasing ? 0.12 : 0);
+    pelvis.position.y = 1.12 + Math.abs(Math.sin(this.gait)) * 0.035;
+
+    const heat = chasing ? 0.75 + Math.sin(this.gait * 4) * 0.25 : 0.28;
+    glintMat.color.setRGB(0.29 * heat + 0.05, 0.05 * heat, 0.06 * heat);
   }
 
   // ---- lifecycle -----------------------------------------------------------
@@ -138,10 +229,11 @@ export class Entity {
     this.state = 'patrol';
     this.nextNode = far;
     this._repath(this._randomNode().pos);
-    this.audio?.stinger();
+    this.audio?.arrival();
   }
 
   despawn() {
+    this.audio?.stopChase();
     this.state = 'dormant';
     this.group.visible = false;
     this.path = [];
@@ -163,7 +255,10 @@ export class Entity {
     const wasChasing = this.state === 'chase';
     this.state = loudness > 0.45 || distance < 7 ? 'chase' : 'investigate';
     this._repath(position);
-    if (!wasChasing && this.state === 'chase') this.audio?.whisper(0);
+    if (!wasChasing && this.state === 'chase') {
+      this.audio?.whisper(0);
+      this.audio?.startChase();
+    }
   }
 
   // ---- navigation ----------------------------------------------------------
@@ -233,6 +328,7 @@ export class Entity {
 
     if (this.state === 'chase' && this.sinceHeard > LOSE_AFTER) {
       this.state = 'investigate';
+      this.audio?.stopChase();
       this.hud?.say('It stops. Somewhere, so does something else.', 'warn');
     }
     if (this.state === 'investigate' && this.sinceHeard > LOSE_AFTER * 2.2) {
@@ -242,7 +338,26 @@ export class Entity {
 
     this._advance(dt);
     this._pressure(dt);
+    this._pulse(dt);
     this._check();
+  }
+
+  /**
+   * Chase layer tracks how close it is, and your own heart takes over once it
+   * is inside about eight metres.
+   */
+  _pulse(dt) {
+    const nearness = this._nearness();
+    if (this.state === 'chase') this.audio?.setChaseIntensity(nearness);
+
+    const close = this.distanceToPlayer < 9 && this.state !== 'patrol';
+    if (!close) return;
+    this.sinceBeat = (this.sinceBeat ?? 0) + dt;
+    const rate = THREE.MathUtils.lerp(1.15, 0.42, nearness);
+    if (this.sinceBeat >= rate) {
+      this.sinceBeat = 0;
+      this.audio?.heartbeat(0.5 + nearness * 0.8);
+    }
   }
 
   _advance(dt) {
@@ -264,6 +379,7 @@ export class Entity {
     }
 
     this.group.position.copy(this.position);
+    this._animate(dt, speed);
     const facing = this.path[0]?.pos ?? next;
     if (!facing.equals(this.position)) {
       this.group.rotation.y = Math.atan2(
@@ -303,12 +419,18 @@ export class Entity {
   _check() {
     const distance = planar(this.position, this.player.position);
 
+    // it cannot find you in a cabinet, but it can wait outside one
+    if (this.isPlayerHidden?.()) return;
+
     if (inContainment(this.player.position)) {
       // it will not come in. it waits.
       if (this.state === 'chase' && distance < 6) this.sinceHeard = 0;
       return;
     }
-    if (distance < CATCH_RANGE) this.onCatch?.();
+    if (distance < CATCH_RANGE) {
+      this.audio?.caught();
+      this.onCatch?.();
+    }
 
     // when it is close and hunting, it starts turning things off
     if (
