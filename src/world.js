@@ -90,6 +90,17 @@ export function fixtureGrid() {
   return spots;
 }
 
+/** Set once the hall is built; used to switch the rig between day and night. */
+export const rig = {
+  lampMat: null,
+  troffers: [],
+  washes: [],
+  ambient: null,
+  hemisphere: null,
+  emergency: [],
+  exitSigns: [],
+};
+
 /** Cable trays and the light troffers that hang off them. */
 function buildCeilingRig(scene) {
   const { minX, maxX, height } = HALL;
@@ -104,6 +115,7 @@ function buildCeilingRig(scene) {
     emissiveIntensity: 2.1,
     roughness: 0.4,
   });
+  rig.lampMat = lampMat;
   const trayGeo = new THREE.BoxGeometry(maxX - minX - 1, 0.14, 0.5);
   const lampGeo = new THREE.BoxGeometry(2.4, 0.08, 0.4);
 
@@ -155,8 +167,9 @@ export function lightPlan() {
 }
 
 function buildLighting(scene) {
-  scene.add(new THREE.HemisphereLight(0xa8ccef, 0x121a22, LIGHTING.hemisphere));
-  scene.add(new THREE.AmbientLight(0x2b3947, LIGHTING.ambient));
+  rig.hemisphere = new THREE.HemisphereLight(0xa8ccef, 0x121a22, LIGHTING.hemisphere);
+  rig.ambient = new THREE.AmbientLight(0x2b3947, LIGHTING.ambient);
+  scene.add(rig.hemisphere, rig.ambient);
 
   for (const spec of lightPlan()) {
     const isWash = spec.y === LIGHTING.wash.height;
@@ -165,5 +178,80 @@ function buildLighting(scene) {
     );
     light.position.set(spec.x, spec.y, spec.z);
     scene.add(light);
+    (isWash ? rig.washes : rig.troffers).push(light);
+  }
+
+  buildEmergencyLighting(scene);
+}
+
+/**
+ * Runs off the UPS, so it is the only thing left when the hall goes dark.
+ * Built in every mode but dark until night falls.
+ */
+function buildEmergencyLighting(scene) {
+  const { minX, maxX, minZ, maxZ, height } = HALL;
+
+  const signMat = new THREE.MeshBasicMaterial({ color: 0x1d6b3f, toneMapped: false });
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x11181f, roughness: 0.8 });
+  const signGeo = new THREE.PlaneGeometry(0.44, 0.18);
+
+  // exit signs over the two doors — the landmarks you steer by in the dark
+  for (const [x, z, ry] of [[0, minZ + 0.3, 0], [maxX - 0.3, 2, -Math.PI / 2]]) {
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.22, 0.08), bodyMat);
+    body.position.set(x, 2.6, z);
+    body.rotation.y = ry;
+    scene.add(body);
+
+    const sign = new THREE.Mesh(signGeo, signMat.clone());
+    sign.position.set(x, 2.6, z);
+    sign.rotation.y = ry;
+    sign.translateZ(0.05);
+    scene.add(sign);
+    rig.exitSigns.push(sign);
+  }
+
+  const spots = [
+    [minX + 1.5, minZ + 4], [minX + 1.5, maxZ - 4],
+    [maxX - 1.5, minZ + 4], [maxX - 1.5, maxZ - 4],
+    [0, minZ + 1.5], [0, maxZ - 1.5],
+  ];
+  for (const [x, z] of spots) {
+    const lamp = new THREE.PointLight(0xffb26b, 0, 11, 2);
+    lamp.position.set(x, height - 1.4, z);
+    scene.add(lamp);
+
+    const bulb = new THREE.Mesh(
+      new THREE.BoxGeometry(0.22, 0.1, 0.12),
+      new THREE.MeshBasicMaterial({ color: 0x2a2018, toneMapped: false }),
+    );
+    bulb.position.copy(lamp.position);
+    scene.add(bulb);
+    rig.emergency.push({ lamp, bulb });
+  }
+}
+
+/**
+ * Day is the working hall. Night kills the ceiling grid and leaves the
+ * emergency fittings, which is all the mode really needs to feel different.
+ */
+export function setLightingMode(mode) {
+  const night = mode === 'night';
+
+  for (const light of rig.troffers) light.intensity = night ? 0 : LIGHTING.troffer.intensity;
+  for (const light of rig.washes) light.intensity = night ? 0 : LIGHTING.wash.intensity;
+  rig.ambient.intensity = night ? 0.22 : LIGHTING.ambient;
+  rig.hemisphere.intensity = night ? 0.14 : LIGHTING.hemisphere;
+  rig.ambient.color.set(night ? 0x1b2a3a : 0x2b3947);
+  rig.lampMat.emissiveIntensity = night ? 0.02 : 2.1;
+
+  // `base` is the level effects restore to, so two overlapping flickers can
+  // never leave a fitting dead
+  for (const entry of rig.emergency) {
+    entry.base = night ? 3.2 : 0;
+    entry.lamp.intensity = entry.base;
+    entry.bulb.material.color.set(night ? 0xffb26b : 0x2a2018);
+  }
+  for (const sign of rig.exitSigns) {
+    sign.material.color.set(night ? 0x35ff8a : 0x1d6b3f);
   }
 }
