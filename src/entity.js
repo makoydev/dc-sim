@@ -234,6 +234,19 @@ export class Entity {
     this.audio?.arrival();
   }
 
+  /**
+   * The radio keyed up. It does not know where you are — it knows the channel
+   * is open, and it starts looking properly.
+   */
+  onRadio() {
+    if (this.state === 'dormant') return;
+    this.sinceHeard = 0;
+    if (this.state === 'patrol') {
+      this.state = 'investigate';
+      this._searchNear(this.player.position);
+    }
+  }
+
   /** Put it somewhere directly, discarding any path it was part way along. */
   teleport(position) {
     this.position.set(position.x, 0, position.z);
