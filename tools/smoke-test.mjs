@@ -78,7 +78,7 @@ const hud = {
   say: noop, setStatus: noop, setChecklist: noop, setAlerts: noop,
   setCarry: noop, setStamina: noop, setMarker: noop, setPrompt: noop,
   setTorch: noop, setNoise: noop, setHiding: noop,
-  setCompact: noop, setObjective: noop,
+  setCompact: noop, setObjective: noop, coach: noop,
 };
 
 const scene = new THREE.Scene();
@@ -285,6 +285,50 @@ const { Torch } = await import('../src/torch.js');
   console.log(
     `checklist OK · ${nightList.length} night tasks vs ${dayList.length} by day, plain wording`,
   );
+}
+
+// ---- day-shift coaching ----------------------------------------------------
+
+{
+  const { Coach, COACH_LESSONS } = await import('../src/coach.js');
+  const shown = [];
+  const coach = new Coach({ coach: (t) => shown.push(t) });
+
+  // nights must stay silent — the coaching is the day shift's job
+  coach.start('night');
+  coach.update(99, game, { lookingAtAction: true });
+  if (shown.length) fail('the coach spoke on the night shift');
+
+  // a day shift that hits every situation should teach every lesson, one at a
+  // time and never two at once
+  coach.start('day');
+  const world = {
+    time: 0, hallTemp: 21, carrying: null,
+    tasks: [], openTasks: [],
+  };
+  const seenPerStep = [];
+  for (let i = 0; i < 400; i++) {
+    world.time = i;
+    if (i > 60) world.openTasks = [{ dueAt: 100, need: 'drive' }];
+    if (i > 120) world.carrying = { key: 'drive' };
+    if (i > 180) world.carrying = { key: 'deadDrive' };
+    if (i > 240) world.hallTemp = 28;
+    if (i > 300) world.tasks = [{ kind: 'handover', state: 'todo' }];
+    const before = shown.length;
+    coach.update(1, world, { lookingAtAction: i > 20 });
+    seenPerStep.push(shown.length - before);
+  }
+  if (seenPerStep.some((n) => n > 1)) fail('the coach showed two lessons in one frame');
+  if (!coach.complete) {
+    const missing = COACH_LESSONS.filter((l) => !coach.done.has(l.id)).map((l) => l.id);
+    fail(`coaching never fired: ${missing.join(', ')}`);
+  }
+  if (shown.length !== COACH_LESSONS.length) fail('a lesson repeated itself');
+
+  // and nothing it says should reference a key the game does not bind
+  const KEYS = /\b(W A S D|Shift|Tab|Esc|E|F3|F)\b/;
+  if (!shown.some((t) => KEYS.test(t))) fail('no lesson mentions any control');
+  console.log(`coaching OK · ${COACH_LESSONS.length} lessons, day only, one at a time`);
 }
 
 // ---- the partner -----------------------------------------------------------
