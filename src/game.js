@@ -9,7 +9,9 @@ import {
   rollIncident,
 } from './tasks.js';
 
-const SHIFT_SECONDS = 780; // 08:00 -> 20:00
+// The day shift is the on-ramp: long enough to meet every system once, short
+// enough that nobody is doing paperwork at the end.
+const SHIFT_SECONDS = 600; // 08:00 -> 20:00
 // nights run shorter: dread does not survive thirteen minutes, and the back
 // half was where it turned into chores
 const NIGHT_SECONDS = 540;

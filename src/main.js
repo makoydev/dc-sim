@@ -13,6 +13,7 @@ import { Presence } from './presence.js';
 import { Entity } from './entity.js';
 import { Perf } from './perf.js';
 import { Partner } from './partner.js';
+import { Coach } from './coach.js';
 
 const canvas = document.getElementById('scene');
 // antialiasing is not worth its cost on a hall made of boxes, and the
@@ -40,6 +41,7 @@ const torch = new Torch(camera, scene);
 const presence = new Presence({ camera, player, racks, hud, audio });
 const entity = new Entity({ scene, player, racks, hud, audio });
 const partner = new Partner({ hud, audio, entity });
+const coach = new Coach(hud);
 const game = new Game({
   scene, camera, player, racks, stations, hud, audio, presence, entity, partner,
 });
@@ -86,6 +88,7 @@ function beginShift(mode) {
     : new THREE.Fog(0x0a121a, 26, 80);
   renderer.toneMappingExposure = mode === 'night' ? 1.0 : 1.14;
   torch.on = mode === 'night';
+  coach.start(mode);
   game.start(mode);
   canvas.requestPointerLock();
 }
@@ -99,19 +102,22 @@ function showBriefing() {
     `<h1>Uptime</h1>
      <h2>Data hall 3 &middot; pick your shift</h2>
      ${touchOnly ? '<p class="bad">This one needs a keyboard and mouse — open it on a laptop or desktop.</p>' : ''}
-     <p>You are the engineer on the floor. Work the checklist, answer the tickets
-     that page you during the shift, and keep the SLA above 99.9%.</p>
-     <p class="dim">Failed drives, clogged filters and tripped breakers all cost
-     uptime while they sit open. Parts live in the spares cage; dead hardware
-     goes in the e-waste bin.</p>
-     ${CONTROLS}
+     <p>You are the engineer on the floor. Keep the racks alive until the end of
+     the shift.</p>
      <div class="choices">
-       <button id="day">Day shift &middot; 08:00</button>
-       <button id="night" class="ghost">Night shift &middot; 22:00</button>
+       <button id="day">Day shift</button>
+       <button id="night" class="ghost">Night shift</button>
      </div>
-     <p class="dim small">Nights: shorter list, emergency lighting, and you work
-     by torch. Sound carries — the fans cover you, while they are running.
-     Ramos is down at the genset. He will be on the radio.</p>`,
+     <div class="pitch">
+       <p><b class="accent">Day</b> &mdash; 08:00, lights on, nothing hunting you.
+       It walks you through the hall and the job as you go. <span class="dim">Start
+       here if this is your first shift.</span></p>
+       <p><b class="bad">Night</b> &mdash; 22:00, emergency lighting, one torch.
+       Shorter list, and you are not alone on the floor. <span class="dim">Sound
+       carries. The fans cover you, while they are running.</span></p>
+     </div>
+     <p class="dim small">Controls are taught on the day shift. Tab for the full
+     checklist, F3 for frame rate.</p>`,
     (root) => {
       root.querySelector('#day').addEventListener('click', () => beginShift('day'));
       root.querySelector('#night').addEventListener('click', () => beginShift('night'));
@@ -151,6 +157,9 @@ function showReport(report) {
               report.partnerLost ? 'bad' : 'dim')
        : ''}
      ${line('Score', `${report.score}/100`)}
+     ${report.mode === 'day'
+       ? '<p class="dim small">You know the hall now. The night shift is the same floor at 22:00.</p>'
+       : ''}
      <p></p><button id="again">Start another shift</button>`,
     (root) => {
       root.querySelector('#again').addEventListener('click', () => location.reload());
@@ -193,6 +202,9 @@ function frame() {
     torch.update(dt, player.velocity.length());
     hud.setTorch(game.mode === 'night' ? torch : null);
     hud.setNoise(game.mode === 'night' ? game.noise : null);
+    coach.update(dt, game, {
+      lookingAtAction: Boolean(interaction.action && !interaction.action.disabled),
+    });
 
     // hardware work rattles: holding E is a commitment, not a free action
     if (interaction.holding && interaction.action && !interaction.action.disabled) {
