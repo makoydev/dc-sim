@@ -32,7 +32,8 @@ The game needs to be served over HTTP (ES modules + import maps); opening
 
 ## Two shifts
 
-**Day** is the working hall described below — the full checklist, no threat.
+**Day** is the on-ramp: the working hall described below, full checklist, no
+threat, and it teaches you the job as you go.
 **Night** is the same hall at 22:00 on emergency lighting, worked by torch,
 with a much shorter list, plain-language jobs, one objective on screen, and
 something on the floor that hunts by sound. The fans cover you while they are running; a cold aisle or a
@@ -73,6 +74,7 @@ src/torch.js        the hand torch and its battery
 src/presence.js     night-shift director — flickers, footsteps, phantom faults
 src/perf.js         frame-rate governor and the F3 stats overlay
 src/partner.js      Ramos on the radio, and whatever answers after
+src/coach.js        the day shift's contextual teaching hints
 src/entity.js       the thing that hunts by sound, and its aisle nav graph
 tools/smoke-test.mjs  headless full-shift run
 tools/light-check.mjs samples the light plan at the spots a player stands

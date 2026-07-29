@@ -27,6 +27,31 @@ Effort is a rough estimate for one person:
   `npm run lights`, which samples the real light plan at the spots a player
   stands so this can be judged without a screenshot. (`world.js`,
   `tools/light-check.mjs`)
+- **1.7 Screen repaints on demand.** Eleven canvas-backed displays were
+  repainting on the same 4 Hz timer regardless of where the player was. They
+  now repaint only within 14 m and roughly in front of you. (`game.js`)
+- **4.1 Instanced racks.** 72 racks were 288 meshes; they are now four
+  `InstancedMesh` draws plus one invisible hitbox each for picking, and the
+  status LEDs are a single instanced colour buffer. Fan blades got the same
+  treatment. Draw calls went 594 → 269. (`racks.js`, `props.js`)
+- **4.6 Light budget.** A zero-intensity light still costs a full evaluation
+  per fragment, so night mode was paying for 26 fittings it had "switched
+  off". Lights now toggle `visible`, and the day grid dropped from 20 fittings
+  to 12 stronger ones — evenness actually improved, 2.9x → 2.0x. Day runs 16
+  lights, night 7. (`world.js`)
+- **Adaptive resolution.** `devicePixelRatio` 2 meant shading four times the
+  fragments, each looping every light. The ratio is capped at 1.5 and a
+  governor drops it when frames fall below 45 fps, restoring it only after six
+  seconds of headroom. MSAA is off. Added `npm run perf` as a draw-call and
+  light budget, and F3 for live stats. (`perf.js`, `tools/perf-check.mjs`)
+- **6.7 Day shift as the on-ramp.** The wall-of-text briefing is gone. The day
+  shift now teaches through ten one-shot contextual hints that fire when you
+  first hit the situation they describe, and the menu frames day as the place
+  to start. (`coach.js`)
+- **2.9 → Cold Aisle, the whole night shift.** Night lighting, a battery torch, a
+  presence director, the entity, hiding places, and Ramos on the radio. That
+  is its own design doc — see [HORROR.md](./HORROR.md), whose build order is
+  complete.
 
 ---
 
@@ -42,7 +67,6 @@ reused.
 | 1.4 | Tuning constants are scattered across modules (`SHIFT_SECONDS`, `INCIDENT_GAP` in `game.js`; `WALK`/`SPRINT`/`EYE` in `player.js`; `RANGE` in `interaction.js`). Pull them into one `config.js` so difficulty can be tuned — and eventually chosen by the player — in one place. | new `src/config.js` | S |
 | 1.5 | Incidents use bare `Math.random()`, so no two shifts can be compared and the smoke test is non-deterministic. A seeded PRNG gives reproducible runs, regression tests, and shareable "shift seeds". | `tasks.js:rollIncident`, `game.js` | S |
 | 1.6 | The walkthrough waypoints are hardcoded in `AISLES` and will silently drift if the rack layout in `racks.js:ROWS` changes. Derive them from the row definitions instead. | `tasks.js`, `racks.js` | S |
-| 1.7 | Every CRAC/UPS screen repaints on the same 4 Hz timer whether or not the player can see it. Skip repaints for screens outside the frustum or beyond ~12 m. | `game.js:_updateScreens` | S |
 | 1.8 | No pause-on-blur. Alt-tab away mid-shift and the clock keeps running (the SLA does not). | `main.js` | S |
 | 1.9 | Mouse sensitivity is a hardcoded `0.0022` with no way to change it, and there is no invert-Y. | `player.js`, settings UI | S |
 
@@ -77,9 +101,7 @@ decisions on top of it.
 - **2.8 Badge access and safety procedures (S–M).** ESD strap before touching a
   rack, lockout/tagout before opening a PDU. Skipping them is faster and
   occasionally very expensive — an honest source of risk/reward.
-- **2.9 Night shift / on-call variant (M).** Darker hall, skeleton lighting, fewer
-  routine tasks, worse incidents, and a phone that wakes you up.
-- **2.10 Capacity planning (L).** Install new racks, balance power draw across
+- **2.9 Capacity planning (L).** Install new racks, balance power draw across
   feeds, and get scored on how much headroom you left.
 
 ---
@@ -112,10 +134,6 @@ first-order approach to a target temperature (`game.js:_updateThermals`).
 
 Currently ~300 draw calls of unmerged boxes, no instancing, no post-processing.
 
-- **4.1 Instance the racks (M).** 72 racks × 4 meshes is the bulk of the scene.
-  `InstancedMesh` for frames and panels, with per-instance colour for LEDs,
-  would cut draw calls by an order of magnitude and leave headroom for a much
-  bigger hall.
 - **4.2 Post-processing pass (M).** Subtle bloom on the LEDs and screens, and a
   vignette. This is the single biggest visual-payoff-per-hour change available.
 - **4.3 Screen-space ambient occlusion (M).** Or, much cheaper, a darkened decal
@@ -123,12 +141,6 @@ Currently ~300 draw calls of unmerged boxes, no instancing, no post-processing.
 - **4.4 Level of detail (S).** Racks past ~20 m do not need front-panel textures.
 - **4.5 Quality presets (S).** Low/medium/high toggling pixel ratio, shadow and
   post-processing, since this needs to run on laptops.
-- **4.6 Light budget (S–M).** Evening out the hall took the punctual light
-  count from 16 to 26, and every one of them is evaluated per fragment in the
-  forward renderer. It is comfortable on an M-series Mac; it is the first thing
-  to look at if a weaker GPU struggles. Baked lightmaps or fewer, wider lights
-  would remove the ceiling on this entirely. Check the spread with
-  `npm run lights` after any change.
 - **4.7 A build step (M).** Vendoring `three.module.js` keeps the project
   dependency-free and hostable from any static directory, but it ships ~2 MB
   uncompressed. A bundler with tree-shaking would cut that hard. Worth doing
@@ -238,6 +250,21 @@ If someone new wants to pick this up: **5.1** (positional CRAC audio), **1.4**
 blur) are all small, self-contained, and each makes the game noticeably better
 on its own.
 
-Next up, in order: positional audio, then central config plus a seeded RNG so
-balance is measurable, then the data-driven task refactor in section 7 before
-any new incident types are added.
+## What I would do next
+
+1. **1.5 seeded RNG, then 1.4 central config.** Every balance question so far —
+   is the entity too fast, do incidents come too often, is the night long
+   enough — has been answered by feel, because no two shifts are comparable
+   and the knobs live in five files. This makes them measurable and gives
+   shareable shift seeds.
+2. **7.1 data-driven tasks**, before any new incident type is added. Task
+   behaviour still lives in a `switch` over `kind` in `game.js`, and that is
+   what makes section 2 expensive.
+3. **4.2 post-processing**, but only once someone reports frame-rate headroom
+   to spend. Bloom on the LEDs and screens would flatter the night shift more
+   than anything else on this list.
+
+Bigger question first, though: whether this stays a two-shift game that is
+finished, or becomes the career mode in 9.3. The simulation already tracks the
+state career mode would need, and that decision changes what is worth building
+next.
