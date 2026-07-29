@@ -40,6 +40,7 @@ export class HUD {
         <div id="noise" hidden><span>noise</span><div class="track"><div class="fill"></div></div></div>
         <div id="stamina"><div></div></div>
       </div>
+      <div id="coach"></div>
       <div id="hiding"></div>
       <div id="marker"><div class="ring"></div><div class="text"></div></div>
       <div id="overlay" class="overlay"></div>
@@ -165,6 +166,18 @@ export class HUD {
   setCarry(item) {
     this.carry.textContent = item ? `Carrying: ${item.label}` : 'Hands free';
     this.carry.className = item ? 'item accent' : 'item dim';
+  }
+
+  /**
+   * A teaching line. Deliberately not in the log — the log scrolls and this
+   * needs to sit still long enough to read.
+   */
+  coach(text) {
+    const node = this.q('#coach');
+    node.textContent = text;
+    node.classList.add('on');
+    clearTimeout(this._coachTimer);
+    this._coachTimer = setTimeout(() => node.classList.remove('on'), 7000);
   }
 
   /** Closes the view down to a slot when the player is inside something. */
