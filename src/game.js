@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Screen } from './screen.js';
-import { rig, setEmergencyReserve } from './world.js';
+import { HALL, rig, setEmergencyReserve } from './world.js';
 import {
   AISLES,
   ITEMS,
@@ -29,6 +29,13 @@ const INCIDENT_GAP = [55, 105];
 // on it.
 const LIGHT_RESERVE_BASE = 0.72;
 const LIGHT_RESERVE_PER_TEST = 0.37;
+// The thermal map is the only camera in the building — HORROR.md §4 and §11.
+// Sampled coarsely on purpose: this is a facility trend log, not a security
+// feed, and a sparse track reads far more like "something was here" than a
+// smooth line would. The loop covers most of a night at 1.6 s a frame.
+const TRACK_INTERVAL = 1.6;
+const TRACK_SECONDS = 240;
+const REVIEW_SECONDS = 11;
 
 export class Game {
   constructor({
@@ -73,6 +80,9 @@ export class Game {
     this.handoverAdded = false;
     this.lightReserve = 1;
     this._shedCount = 0;
+    this.track = [];
+    this.review = null;
+    this._trackAcc = 0;
     this._screenAcc = 0;
     this._humLevel = 1;
     this._look = new THREE.Vector3();
@@ -99,6 +109,9 @@ export class Game {
     this.nextIncidentAt = 30;
     this.lightReserve = 1;
     this._shedCount = 0;
+    this.track = [];
+    this.review = null;
+    this._trackAcc = 0;
     this.hud.setCompact(mode === 'night');
     this.partner?.reset();
     this.hud.say(
@@ -115,12 +128,17 @@ export class Game {
     return this.mode === 'night' ? NIGHT_SECONDS : SHIFT_SECONDS;
   }
 
-  get clockText() {
+  /** Shift time as a wall clock. Takes a time so the camera loop can label frames. */
+  clockAt(time) {
     const start = this.mode === 'night' ? NIGHT_START_HOUR : SHIFT_START_HOUR;
-    const hours = start + (this.time / this.duration) * SHIFT_HOURS;
+    const hours = start + (time / this.duration) * SHIFT_HOURS;
     const h = Math.floor(hours) % 24;
     const m = Math.floor((hours - Math.floor(hours)) * 60);
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
+
+  get clockText() {
+    return this.clockAt(this.time);
   }
 
   get progress() {
@@ -150,6 +168,8 @@ export class Game {
       // before the director's flickers and blackouts paint over the top —
       // otherwise a flicker gets stamped out again the same frame
       this._updateEmergencyPower();
+      this._recordTrack(dt);
+      this._updateReview(dt);
       this.partner?.update(this.progress);
       this.presence?.update(dt, this.progress);
       this._updateEntity(dt);
@@ -328,6 +348,9 @@ export class Game {
     this.uptime = Math.max(90, this.uptime - 0.4);
     for (const rack of this.racks) rack.temp += 2.5;
     this.carrying = null;
+    // an hour passes; whatever was on the monitor finished playing without you.
+    // Leaving it running would also wedge the desk shut, handover and all.
+    this.review = null;
     this.entityGraceUntil = this.time + 75;
     this.exitHiding();
   }
@@ -369,6 +392,56 @@ export class Game {
       this.hud.say('The bank picks the load back up. The lights lift.', 'good');
     }
     this._shedCount = shed;
+  }
+
+  /**
+   * The thermal map has been logging the hall all night whether anyone was
+   * watching or not. Both tracks go in: the point of the loop is not where it
+   * is now, it is how near it came while you had your back to it.
+   */
+  _recordTrack(dt) {
+    this._trackAcc += dt;
+    if (this._trackAcc < TRACK_INTERVAL) return;
+    this._trackAcc = 0;
+
+    const onFloor = this.entity && this.entity.state !== 'dormant';
+    this.track.push({
+      t: this.time,
+      px: this.player.position.x,
+      pz: this.player.position.z,
+      ex: onFloor ? this.entity.position.x : null,
+      ez: onFloor ? this.entity.position.z : null,
+    });
+    const cap = Math.round(TRACK_SECONDS / TRACK_INTERVAL);
+    if (this.track.length > cap) this.track.splice(0, this.track.length - cap);
+  }
+
+  /** How near it got, over a stretch of the loop. Null if it never showed. */
+  closestApproach(frames) {
+    let best = null;
+    for (const f of frames) {
+      if (f.ex === null) continue;
+      const d = Math.hypot(f.ex - f.px, f.ez - f.pz);
+      if (!best || d < best.distance) best = { distance: d, t: f.t };
+    }
+    return best;
+  }
+
+  _updateReview(dt) {
+    if (!this.review) return;
+    this.review.elapsed += dt;
+    if (this.review.elapsed < REVIEW_SECONDS) return;
+
+    // the number is the whole payoff: you already survived this, and now you
+    // know by how much
+    const near = this.closestApproach(this.review.frames);
+    this.review = null;
+    this.hud.say(
+      near
+        ? `Loop ends. Nearest it came to you: ${near.distance.toFixed(1)} m.`
+        : 'Loop ends. Nothing on it but you.',
+      near && near.distance < 6 ? 'bad' : 'warn',
+    );
   }
 
   /**
@@ -753,6 +826,30 @@ export class Game {
         },
       };
     }
+    // Nights: the thermal map is the only camera in the building, and this desk
+    // is the only place it can be read — which is the trade. Everything you
+    // need to do is at the other end of the hall, and the loop takes eleven
+    // seconds you have to spend standing still in the corner to watch.
+    if (this.mode === 'night' && this.entity) {
+      if (this.review) {
+        const left = Math.ceil(REVIEW_SECONDS - this.review.elapsed);
+        return { label: 'Camera loop', hint: `Playing back · ${left}s`, disabled: true };
+      }
+      if (!this.track.some((f) => f.ex !== null)) {
+        return { label: 'Camera loop', hint: 'Nothing on it but you so far', disabled: true };
+      }
+      return {
+        label: 'Play back the camera loop',
+        hint: 'The last few minutes of this floor',
+        holdTime: 1.8,
+        run: () => {
+          this.review = { elapsed: 0, frames: this.track.slice() };
+          this.audio?.blip();
+          this.hud.say('The map winds back.', 'warn');
+        },
+      };
+    }
+
     const open = this.openTasks.length;
     return {
       label: 'NOC dashboard',
@@ -941,12 +1038,98 @@ export class Game {
     if (this._screenWorthPainting(this.noc.position)) this._paintNoc();
   }
 
+  /** Hall floor coordinates onto a rectangle of a screen. */
+  _hallToMap(hx, hz, x, y, w, h) {
+    return {
+      x: x + ((hx - HALL.minX) / (HALL.maxX - HALL.minX)) * w,
+      y: y + ((hz - HALL.minZ) / (HALL.maxZ - HALL.minZ)) * h,
+    };
+  }
+
+  /**
+   * Square layers rather than a gradient: it matches the blocky readout the
+   * rest of these screens are drawn in, and it survives the stubbed canvas the
+   * smoke test paints through.
+   */
+  _paintColdSpot(g, cx, cy) {
+    for (const [size, alpha, color] of [
+      [26, 0.12, '#0a2f4d'], [17, 0.22, '#0f4a72'], [9, 0.55, '#4cc2ff'], [4, 0.9, '#dff2ff'],
+    ]) {
+      g.globalAlpha = alpha;
+      g.fillStyle = color;
+      g.fillRect(cx - size / 2, cy - size / 2, size, size);
+    }
+    g.globalAlpha = 1;
+  }
+
+  /**
+   * The loop, scrubbed through over REVIEW_SECONDS. A floor plan on the left at
+   * the hall's real proportions, the numbers on the right — the one that
+   * matters being how close it got while you were somewhere else.
+   */
+  _paintReview(g, w, h) {
+    const { frames, elapsed } = this.review;
+    const played = Math.min(1, elapsed / REVIEW_SECONDS);
+    const shown = frames.slice(0, Math.max(1, Math.round(frames.length * played)));
+    const head = shown[shown.length - 1];
+
+    const map = { x: 12, y: 36, w: 104, h: 88 };
+    const put = (hx, hz) => this._hallToMap(hx, hz, map.x, map.y, map.w, map.h);
+
+    Screen.text(g, 'CAMERA LOOP', 12, 26, 18, '#ffc247');
+    g.strokeStyle = 'rgba(76,194,255,0.3)';
+    g.lineWidth = 2;
+    g.strokeRect(map.x, map.y, map.w, map.h);
+
+    // your track first, so its track always draws over the top of yours
+    g.globalAlpha = 0.45;
+    g.fillStyle = '#2f6b52';
+    for (const f of shown) {
+      const p = put(f.px, f.pz);
+      g.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
+    }
+    g.globalAlpha = 0.5;
+    g.fillStyle = '#4cc2ff';
+    for (const f of shown) {
+      if (f.ex === null) continue;
+      const p = put(f.ex, f.ez);
+      g.fillRect(p.x - 2, p.y - 2, 4, 4);
+    }
+    g.globalAlpha = 1;
+
+    if (head) {
+      const you = put(head.px, head.pz);
+      g.fillStyle = '#46d39a';
+      g.fillRect(you.x - 2.5, you.y - 2.5, 5, 5);
+      if (head.ex !== null) {
+        const it = put(head.ex, head.ez);
+        this._paintColdSpot(g, it.x, it.y);
+      }
+    }
+
+    const near = this.closestApproach(shown);
+    const col = 128;
+    Screen.text(g, head ? this.clockAt(head.t) : '--:--', col, 52, 22, '#d8e6f2');
+    Screen.text(g, 'NEAREST', col, 78, 14, '#7d93a6');
+    Screen.text(g, near ? `${near.distance.toFixed(1)} m` : 'no contact', col, 100, 22,
+      near && near.distance < 6 ? '#ff5f56' : '#46d39a');
+    if (near) Screen.text(g, `at ${this.clockAt(near.t)}`, col, 118, 14, '#7d93a6');
+
+    Screen.bar(g, 12, h - 22, w - 24, 5, played, '#ffc247');
+    Screen.text(g, 'YOU', 12, h - 6, 13, '#46d39a');
+    Screen.text(g, 'UNRESOLVED CONTACT', w - 12, h - 6, 13, '#4cc2ff', 'right');
+  }
+
   _paintNoc() {
     const [left, center, right] = this.noc.monitors;
     const open = this.openTasks;
 
     left.paint((g, w, h) => {
       Screen.bg(g, w, h);
+      if (this.review) {
+        this._paintReview(g, w, h);
+        return;
+      }
       Screen.text(g, 'HALL THERMALS', 14, 30, 20, '#4cc2ff');
       const cols = 12;
       const rows = 6;
@@ -959,6 +1142,15 @@ export class Game {
         g.fillStyle = `hsl(${(1 - t) * 150}, 70%, ${28 + t * 22}%)`;
         g.fillRect(14 + col * cw, 44 + row * ch, cw - 2, ch - 2);
       });
+      // §4: the map is also the only camera. It reads as a cold spot because
+      // whatever it is does not register as heat — visible from this desk and
+      // nowhere else in the hall.
+      if (this.mode === 'night' && this.entity && this.entity.state !== 'dormant') {
+        const at = this._hallToMap(
+          this.entity.position.x, this.entity.position.z, 14, 44, w - 28, 106,
+        );
+        this._paintColdSpot(g, at.x, at.y);
+      }
       Screen.text(g, `AVG ${this.hallTemp.toFixed(1)}C`, 14, h - 14, 17, '#d8e6f2');
       Screen.text(g, `HOT ${this.hotRacks ?? 0}`, w - 14, h - 14, 17,
         this.hotRacks ? '#ff5f56' : '#46d39a', 'right');

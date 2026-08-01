@@ -39,8 +39,9 @@ with a much shorter list, plain-language jobs, one objective on screen, and
 something on the floor that hunts by sound. The fans cover you while they are running; a cold aisle or a
 cabinet will hide you. The emergency lighting runs off the UPS bank, so it goes
 out fitting by fitting as the night wears on — unless you find the time to
-self-test the cabinets, which nothing on the checklist will ask you to do.
-See [HORROR.md](./HORROR.md).
+self-test the cabinets, which nothing on the checklist will ask you to do. The
+thermal map at the NOC desk is the only camera in the building, and it has been
+recording. See [HORROR.md](./HORROR.md).
 
 ## The shift
 

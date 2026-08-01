@@ -660,4 +660,118 @@ const { inContainment } = await import('../src/world.js');
   );
 }
 
+// ---- the camera loop -------------------------------------------------------
+
+{
+  const { Entity } = await import('../src/entity.js');
+  const noc = stations.find((s) => s.kind === 'noc');
+  const cam = new Game({
+    scene, camera, player, racks, stations, hud, audio: null,
+    presence: null, entity: new Entity({ scene, player, racks, hud, audio: null }),
+  });
+  setLightingMode('night');
+  cam.start('night');
+
+  // nothing to review before it has been on the floor
+  player.position.set(0, 1.68, -10);
+  const cold = cam.resolveAction(noc);
+  if (!cold?.disabled) fail('the loop offered a playback before anything was recorded');
+
+  // Run far enough in that it has arrived and both tracks are being logged.
+  // Standing still in the open gets you caught; a real player comes to and
+  // carries on, so the test does too rather than stalling in the 'caught' phase.
+  const play = (until) => {
+    while (cam.time < until && cam.phase !== 'ended') {
+      if (cam.phase === 'caught') cam.resumeAfterCatch();
+      cam.update(1 / 30);
+    }
+    // a catch can land on the last step, and everything below needs a shift
+    // that is actually being played
+    if (cam.phase === 'caught') cam.resumeAfterCatch();
+  };
+  play(200);
+  if (!cam.track.length) fail('the loop recorded nothing at all');
+  if (!cam.track.some((f) => f.ex !== null)) fail('the loop never recorded the entity');
+  if (!cam.track.every((f) => Number.isFinite(f.px) && Number.isFinite(f.pz))) {
+    fail('the loop recorded a broken player position');
+  }
+
+  if (cam.track[0].t >= cam.track.at(-1).t) fail('the loop is not in time order');
+
+  // closest approach has to be a real measurement, not a placeholder
+  const near = cam.closestApproach(cam.track);
+  if (!near) fail('nothing was ever close enough to measure');
+  const checked = Math.min(...cam.track
+    .filter((f) => f.ex !== null)
+    .map((f) => Math.hypot(f.ex - f.px, f.ez - f.pz)));
+  if (Math.abs(near.distance - checked) > 1e-9) fail('closest approach disagrees with the track');
+
+  // playing it back takes a fixed stretch of standing still, then ends itself
+  const prompt = cam.resolveAction(noc);
+  if (!prompt || prompt.disabled) fail('no way to play the loop back at the desk');
+  prompt.run();
+  if (!cam.review) fail('the playback did not start');
+  const busy = cam.resolveAction(noc);
+  if (!busy?.disabled) fail('the loop could be restarted while already playing');
+
+  // it must paint at every point of the scrub without throwing
+  for (let i = 0; i < 40; i++) {
+    cam.review.elapsed = (i / 39) * 10.9;
+    cam._paintNoc();
+  }
+  cam.review.elapsed = 0;
+
+  let guard = 0;
+  while (cam.review && guard++ < 2000) {
+    if (cam.phase === 'caught') cam.resumeAfterCatch();
+    cam.update(1 / 30);
+  }
+  if (cam.review) fail('the playback never ended');
+
+  // being caught mid-playback must clear it rather than wedging the desk shut
+  // (the loop above may itself have exited on exactly that, so reset first)
+  if (cam.phase === 'caught') cam.resumeAfterCatch();
+  cam.review = { elapsed: 0, frames: cam.track.slice() };
+  cam.playerCaught();
+  if (cam.review) fail('a catch left the loop playing forever');
+  cam.resumeAfterCatch();
+
+  // the shift clock does not stop for it, and neither does anything else
+  if (cam.phase !== 'running') fail('watching the loop ended the shift');
+
+  // the buffer is a loop, not a leak
+  // Hold it off the floor for the rest of this run: a catch pushes the clock
+  // forward by an hour, which could otherwise skip the shift straight past the
+  // handover window this next part is checking.
+  const capped = cam.track.length;
+  cam.entity.despawn();
+  cam.entityGraceUntil = Infinity;
+  play(480);
+  if (cam.track.length > 160) fail(`the track buffer grew to ${cam.track.length} frames`);
+  if (cam.track.length < capped) fail('the track buffer shrank instead of rolling');
+
+  // once there is a shift to sign off, the desk is for signing off — the loop
+  // must never sit in front of the one action that ends the night
+  if (!cam._taskFor('handover')) fail('the handover never appeared late in the shift');
+  const late = cam.resolveAction(noc);
+  if (!/handover/i.test(late?.label ?? '')) {
+    fail(`the loop blocked the handover: "${late?.label}"`);
+  }
+
+  // a fresh shift starts on an empty loop
+  cam.start('night');
+  if (cam.track.length || cam.review) fail('the loop carried over into a new shift');
+
+  // and by day the desk is a desk
+  setLightingMode('day');
+  cam.start('day');
+  for (let i = 0; i < 200; i++) cam.update(1 / 4);
+  if (cam.track.length) fail('the loop kept recording on the day shift');
+  const byDay = cam.resolveAction(noc);
+  if (byDay && !byDay.disabled && /loop/i.test(byDay.label)) {
+    fail('the camera loop leaked into the day shift');
+  }
+  console.log('camera loop OK · records both tracks, rolls, plays back, day shift clean');
+}
+
 console.log('smoke test OK');

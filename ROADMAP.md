@@ -58,6 +58,10 @@ Effort is a rough estimate for one person:
   the capacity back. An untested bank is down to its last light two thirds in;
   a tested one still has four burning at the end. `npm run lights` samples the
   drain so it can be tuned as numbers. (`world.js`, `game.js`, HORROR.md §5)
+- **The camera loop.** The NOC thermal map is now the building's only camera:
+  a live cold spot at night, plus a four-minute recording of both your track
+  and its that can be played back at the desk. Finishes on how close it got
+  while you had your back turned. (`game.js`, HORROR.md §4a)
 - **1.8 Pause on blur.** Was already true when the roadmap claimed otherwise:
   the loop gates every system on `player.locked` (`main.js:196`) and losing
   pointer lock raises the pause overlay, so the shift clock does stop.
@@ -262,20 +266,17 @@ self-contained, and each makes the game noticeably better on its own.
 
 The direction is to keep pushing the horror, so in order:
 
-1. **Camera review at the NOC.** HORROR.md §4 wants the thermal map to double
-   as a security camera, and §11 wants to watch the last ten minutes back. The
-   entity's position is already known every frame and `_paintNoc` already draws
-   the hall as a grid, so this is mostly a ring buffer. The risk/reward is the
-   good part: the only place to learn where it has been is a desk nowhere near
-   your work.
-2. **4.2 post-processing.** Bloom on the LEDs, screens and exit signs, plus a
+1. **4.2 post-processing.** Bloom on the LEDs, screens and exit signs, plus a
    vignette. The instancing and the resolution governor bought the frame-rate
    headroom this was waiting on, and it flatters a dark hall more per hour than
-   anything else on the list — more so now the hall gets genuinely dark.
-3. **The tape library** (HORROR.md §11). A room the day shift never opens. The
-   night currently has nowhere to *go* — there is no genset room to walk to —
-   and this is the answer, but it is real geometry and belongs after the two
-   above.
+   anything else on the list — more so now the hall genuinely goes dark.
+2. **The tape library** (HORROR.md §11). A room the day shift never opens. The
+   night has nowhere to *go* — there is no genset room to walk to — and this is
+   the answer, but it is real geometry and belongs after the above.
+3. **5.1 positional audio.** Currently the night's central rule, *the fans cover
+   you*, is something you are told rather than something you hear. Putting the
+   hum on the CRACs makes the masking system legible by ear, which is where it
+   should have been all along.
 
 Off to the side, **1.10 persistence** is worth more than its size suggests: it
 is what unlocks the other half of §5, where the day shift's UPS self-tests are

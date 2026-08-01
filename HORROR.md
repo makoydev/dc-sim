@@ -124,12 +124,42 @@ All of it is still synthesised. There are no audio files in this project.
   a row gives you direction with no HUD element at all.
 - **The NOC thermal map.** Becomes a security camera: a moving cold spot on the
   left monitor. You can see roughly where it is, but only from the NOC desk,
-  which is nowhere near your tasks.
+  which is nowhere near your tasks. It also *records* — see §4a.
 - **The pager.** Your partner's voice. Later, something that is nearly your
   partner's voice.
 - **The hum.** Cutting the ambience is the loudest thing this game can do.
 
 ---
+
+## 4a. The camera loop
+
+The map has been logging the floor all night whether anyone was watching or
+not. Both tracks go into a ring buffer — yours and its — sampled every 1.6
+seconds and covering the last four minutes. At the NOC desk you can wind it
+back and watch it play through over eleven seconds.
+
+The reason this is worth building is that it is the one piece of information in
+the mode that is about the *past*. Everything else — the hum dropping, the LEDs
+rolling, the heartbeat — tells you where it is now. The loop tells you where it
+was while your back was turned, and finishes on the number that matters:
+
+> **NEAREST 2.4 m** · at 03:41
+
+You already survived that. The loop just tells you by how little.
+
+The trade is deliberate and entirely spatial: the desk is in the north-east
+corner, your work is not, the playback pins you there for eleven seconds, and
+starting it is a hold that makes noise. It runs on real time — the shift clock,
+the heat and the thing on the floor all carry on while you watch.
+
+Two rules that fell out of building it:
+
+- **The handover always wins the desk.** Once there is a shift to sign off, the
+  desk is for signing off. A curiosity must never sit in front of the one action
+  that ends the night, and a test enforces it.
+- **A catch has to clear the playback.** Being caught mid-loop otherwise left
+  it permanently "playing", which wedged the desk shut — handover included.
+  The one place in this mode where a soft-lock was reachable.
 
 ## 5. Light as a resource
 
@@ -255,6 +285,8 @@ Deliberately back to front. Step 3 before step 4 is the whole trick.
 - [x] 6 — light as a resource: the emergency rig on the UPS bank, shedding
       fittings as it drains, and a self-test nobody asks you for that buys it
       back (§5)
+- [x] 7 — the camera loop: the thermal map as the building's only camera, live
+      and recorded, read from the one desk that is nowhere near your work (§4a)
 
 The build order is finished.
 
@@ -349,6 +381,6 @@ heating. That is deliberate — see §2.
 
 - **Co-op.** Two engineers, one ticket queue, one radio. The obvious end state,
   and the reason to keep the sim honest.
-- **The tape library.** A room the day shift never opens.
-- **Camera review.** Watch back the last ten minutes of the thermal map at the
-  NOC and see what walked past you.
+- **The tape library.** A room the day shift never opens. The night has nowhere
+  to *go* — there is no genset room to walk to — and this is the answer.
+- ~~**Camera review.**~~ Built — see §4a.
