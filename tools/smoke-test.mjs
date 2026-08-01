@@ -544,4 +544,120 @@ const { inContainment } = await import('../src/world.js');
   if (!dayAction?.disabled) fail('hiding should be pointless on the day shift');
 }
 
+// ---- emergency lighting as a resource --------------------------------------
+
+{
+  const { EMERGENCY } = await import('../src/world.js');
+  const upses = stations.filter((s) => s.kind === 'ups');
+
+  // Play a night out to a given point in the shift and report what light is
+  // left. `tested` is how many cabinets were self-tested before it started.
+  const runNight = (tested, until) => {
+    setLightingMode('night');
+    for (const [i, ups] of upses.entries()) {
+      ups.selfTested = i < tested;
+      ups.onBattery = false;
+    }
+    game.start('night');
+    while (game.time < until && game.phase === 'running') game.update(1 / 4);
+    return {
+      reserve: game.lightReserve,
+      lit: rig.emergency.filter((e) => !e.shed).length,
+      brightest: Math.max(...rig.emergency.map((e) => e.base)),
+    };
+  };
+
+  const neglected = runNight(0, 520);
+  if (neglected.lit === rig.emergency.length) {
+    fail('a night on an untested bank never shed a single fitting');
+  }
+  if (neglected.reserve > 0.01) fail(`untested bank still had ${neglected.reserve} in reserve`);
+
+  const prepared = runNight(upses.length, 520);
+  if (prepared.lit <= neglected.lit) {
+    fail(`self-testing bought no light: ${prepared.lit} lit vs ${neglected.lit} untested`);
+  }
+  if (prepared.reserve <= neglected.reserve) fail('self-tests did not extend the reserve');
+
+  // it gets dark, but never so dark there is nothing to steer by
+  if (neglected.lit < 1) fail('the hall went completely black');
+  if (!(neglected.brightest > 0)) fail('no fitting was left burning at all');
+
+  // a shed fitting must be switched off rather than dimmed to zero — a dark
+  // light still costs a full evaluation per fragment
+  const shedLights = rig.emergency.filter((e) => e.shed);
+  if (shedLights.some((e) => e.lamp.visible)) fail('a shed fitting was left switched on');
+  if (rig.emergency.some((e) => !Number.isFinite(e.lamp.intensity))) {
+    fail('the reserve drove a fitting to NaN');
+  }
+
+  // the drain has to be monotonic, and shedding has to be ordered — the point
+  // of the shed list is that what survives always points at the door
+  setLightingMode('night');
+  for (const ups of upses) { ups.selfTested = false; ups.onBattery = false; }
+  game.start('night');
+  let last = Infinity;
+  let lastLit = rig.emergency.length;
+  while (game.phase === 'running' && game.time < 520) {
+    game.update(1 / 4);
+    if (game.lightReserve > last + 1e-9) fail('the reserve went back up on its own');
+    const lit = rig.emergency.filter((e) => !e.shed).length;
+    if (lit > lastLit) fail('a shed fitting came back without a self-test');
+    last = game.lightReserve;
+    lastLit = lit;
+  }
+  // exactly one fitting is never on the shed list, and it is the one left
+  const keptIndexes = rig.emergency
+    .map((_, i) => i)
+    .filter((i) => !EMERGENCY.shedOrder.includes(i));
+  if (keptIndexes.length !== 1) fail(`${keptIndexes.length} fittings are exempt from shedding`);
+  if (rig.emergency[keptIndexes[0]].shed) fail('the fitting by the door was shed anyway');
+
+  // Testing a cabinet mid-shift has to give light back there and then — that
+  // visible lift is the only feedback saying the errand was worth walking.
+  // Done while the bank still has something left; once it is flat, it is flat.
+  setLightingMode('night');
+  for (const ups of upses) { ups.selfTested = false; ups.onBattery = false; }
+  game.start('night');
+  while (game.time < 340 && game.phase === 'running') game.update(1 / 4);
+  const dimmest = game.lightReserve;
+  const wasLit = rig.emergency.filter((e) => !e.shed).length;
+  if (!(dimmest > 0)) fail('the bank was already flat 340s into a 540s night');
+  upses[0].selfTested = true;
+  game._updateEmergencyPower();
+  if (game.lightReserve <= dimmest) fail('a mid-shift self-test bought nothing');
+  if (rig.emergency.filter((e) => !e.shed).length < wasLit) {
+    fail('a mid-shift self-test somehow cost a fitting');
+  }
+
+  // and the prompt that does it must exist at night and only at night
+  game.start('night');
+  for (const ups of upses) { ups.selfTested = false; ups.onBattery = false; }
+  const nightPrompt = game.resolveAction(upses[0]);
+  if (!nightPrompt || nightPrompt.disabled) fail('no way to self-test a cabinet at night');
+  if (!/lights/i.test(nightPrompt.hint ?? '')) {
+    fail(`the night prompt never explains the payoff: "${nightPrompt.hint}"`);
+  }
+  nightPrompt.run();
+  if (!upses[0].selfTested) fail('the night self-test did not take');
+
+  // a fresh shift starts on a full bank, whatever the last one ended on
+  game.start('night');
+  if (game.lightReserve !== 1) fail('the reserve carried over into a new shift');
+
+  // by day an untested cabinet with no self-test on the checklist is scenery
+  setLightingMode('day');
+  game.mode = 'day';
+  game.tasks = [];
+  upses[1].selfTested = false;
+  upses[1].onBattery = false;
+  const dayIdle = game.resolveAction(upses[1]);
+  if (!dayIdle?.disabled) fail('the night self-test prompt leaked into the day shift');
+
+  console.log(
+    `emergency power OK · untested bank ends on ${neglected.lit} lights, `
+    + `a tested one on ${prepared.lit}`,
+  );
+}
+
 console.log('smoke test OK');

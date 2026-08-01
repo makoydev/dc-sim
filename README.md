@@ -37,7 +37,10 @@ threat, and it teaches you the job as you go.
 **Night** is the same hall at 22:00 on emergency lighting, worked by torch,
 with a much shorter list, plain-language jobs, one objective on screen, and
 something on the floor that hunts by sound. The fans cover you while they are running; a cold aisle or a
-cabinet will hide you. See [HORROR.md](./HORROR.md).
+cabinet will hide you. The emergency lighting runs off the UPS bank, so it goes
+out fitting by fitting as the night wears on — unless you find the time to
+self-test the cabinets, which nothing on the checklist will ask you to do.
+See [HORROR.md](./HORROR.md).
 
 ## The shift
 
@@ -99,7 +102,10 @@ npm run lights
 
 Samples the hall's light plan at the spots a player actually stands — the CRAC
 faces, the UPS bank, the aisles — and fails if the working areas end up more
-than 4x apart. Useful for judging a lighting change without a screenshot.
+than 4x apart. Then does the same for the night, printing how dark the hall
+gets at each stage of the UPS bank draining and failing if it either stops
+going dark or goes pitch black. Useful for judging a lighting change without a
+screenshot.
 
 ```bash
 npm run perf

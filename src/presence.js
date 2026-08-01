@@ -91,7 +91,9 @@ export class Presence {
 
   /** A troffer strikes, fails, and gives up. */
   flicker() {
-    const entry = rig.emergency[Math.floor(Math.random() * rig.emergency.length)];
+    // a fitting the bank has already shed cannot strike, so pick one still lit
+    const lit = rig.emergency.filter((e) => !e.shed);
+    const entry = lit[Math.floor(Math.random() * lit.length)];
     if (!entry) return;
     this.audio?.ballastBuzz(this.panFor(entry.lamp.position));
     this.effects.push({

@@ -186,7 +186,66 @@ export const rig = {
   hemisphere: null,
   emergency: [],
   exitSigns: [],
+  night: false,
+  reserve: 1,
 };
+
+/**
+ * The emergency rig runs off the UPS bank, so at night the light in the hall is
+ * a resource with a clock on it rather than a switch — HORROR.md §5. Reserve 1
+ * is a full bank; at 0 there is one fitting left over the door, and a torch.
+ */
+export const EMERGENCY = {
+  full: 3.4,
+  bulb: 0xffb26b,
+  sign: 0x35ff8a,
+  // A draining bank sheds non-critical load rather than browning everything out
+  // equally, so fittings go dark one at a time. Ordered furthest-from-the-door
+  // first: whatever is still burning always points at the way out.
+  shedOrder: [1, 3, 0, 2, 5],
+  shedAt: [0.62, 0.48, 0.34, 0.22, 0.12],
+  floor: 0.3, // dimmest the survivors ever get, as a fraction of `full`
+  knee: 0.6, // above this the hall still looks like it did at 22:00
+};
+
+const BULB_LIT = new THREE.Color(EMERGENCY.bulb);
+const SIGN_LIT = new THREE.Color(EMERGENCY.sign);
+
+/** Where the emergency fittings hang. Shared by the builder and the light plan. */
+function emergencySpots() {
+  const { minX, maxX, minZ, maxZ } = HALL;
+  return [
+    [minX + 1.5, minZ + 4], [minX + 1.5, maxZ - 4],
+    [maxX - 1.5, minZ + 4], [maxX - 1.5, maxZ - 4],
+    [0, minZ + 1.5], [0, maxZ - 1.5],
+  ];
+}
+
+/**
+ * What each fitting is burning at a given reserve, as plain numbers — 0 means
+ * the bank has shed it. Pure, so tools/light-check.mjs can sample how dark the
+ * hall actually gets without building a scene.
+ */
+export function emergencyLevels(reserve) {
+  const r = THREE.MathUtils.clamp(reserve, 0, 1);
+  const factor = EMERGENCY.floor
+    + (1 - EMERGENCY.floor) * Math.min(1, r / EMERGENCY.knee);
+  const shedCount = EMERGENCY.shedAt.filter((threshold) => r < threshold).length;
+  const shed = new Set(EMERGENCY.shedOrder.slice(0, shedCount));
+  return {
+    shedCount,
+    factor,
+    levels: emergencySpots().map((_, i) => (shed.has(i) ? 0 : EMERGENCY.full * factor)),
+  };
+}
+
+/** The night equivalent of lightPlan(), at a given state of the bank. */
+export function emergencyPlan(reserve) {
+  const { levels } = emergencyLevels(reserve);
+  return emergencySpots()
+    .map(([x, z], i) => ({ x, y: HALL.height - 1.4, z, intensity: levels[i], range: 11 }))
+    .filter((l) => l.intensity > 0);
+}
 
 /** Cable trays and the light troffers that hang off them. */
 function buildCeilingRig(scene) {
@@ -297,13 +356,8 @@ function buildEmergencyLighting(scene) {
     rig.exitSigns.push(sign);
   }
 
-  const spots = [
-    [minX + 1.5, minZ + 4], [minX + 1.5, maxZ - 4],
-    [maxX - 1.5, minZ + 4], [maxX - 1.5, maxZ - 4],
-    [0, minZ + 1.5], [0, maxZ - 1.5],
-  ];
-  for (const [x, z] of spots) {
-    const lamp = new THREE.PointLight(0xffb26b, 0, 11, 2);
+  for (const [x, z] of emergencySpots()) {
+    const lamp = new THREE.PointLight(EMERGENCY.bulb, 0, 11, 2);
     lamp.position.set(x, height - 1.4, z);
     scene.add(lamp);
 
@@ -323,6 +377,7 @@ function buildEmergencyLighting(scene) {
  */
 export function setLightingMode(mode) {
   const night = mode === 'night';
+  rig.night = night;
 
   for (const light of rig.troffers) light.visible = !night;
   for (const light of rig.washes) light.visible = !night;
@@ -334,12 +389,46 @@ export function setLightingMode(mode) {
   // `base` is the level effects restore to, so two overlapping flickers can
   // never leave a fitting dead
   for (const entry of rig.emergency) {
-    entry.base = night ? 3.4 : 0;
+    entry.shed = false;
+    entry.base = night ? EMERGENCY.full : 0;
     entry.lamp.visible = night;
     entry.lamp.intensity = entry.base;
-    entry.bulb.material.color.set(night ? 0xffb26b : 0x2a2018);
+    entry.bulb.material.color.set(night ? EMERGENCY.bulb : 0x2a2018);
   }
   for (const sign of rig.exitSigns) {
-    sign.material.color.set(night ? 0x35ff8a : 0x1d6b3f);
+    sign.material.color.set(night ? EMERGENCY.sign : 0x1d6b3f);
   }
+  rig.reserve = 1;
+}
+
+/**
+ * Drives the emergency rig from what is left in the UPS bank. Survivors dim on
+ * a curve that stays flat until the bank is well down — a slow even fade is
+ * something you never notice, whereas a fitting going out is an event.
+ *
+ * Returns the number of fittings shed, so the caller can say something the
+ * first time one drops.
+ */
+export function setEmergencyReserve(reserve) {
+  rig.reserve = THREE.MathUtils.clamp(reserve, 0, 1);
+  if (!rig.night) return 0;
+
+  const { levels, factor, shedCount } = emergencyLevels(rig.reserve);
+
+  rig.emergency.forEach((entry, i) => {
+    entry.shed = levels[i] === 0;
+    entry.base = levels[i];
+    // a dark light still costs a full evaluation per fragment, so shed it
+    // rather than dimming it to zero — see the light budget in tools/perf-check
+    entry.lamp.visible = !entry.shed;
+    entry.lamp.intensity = entry.base;
+    entry.bulb.material.color.copy(BULB_LIT).multiplyScalar(entry.shed ? 0.08 : factor);
+  });
+
+  // the signs are the last thing on the bank: they gutter, they never go out
+  for (const sign of rig.exitSigns) {
+    sign.material.color.copy(SIGN_LIT)
+      .multiplyScalar(rig.reserve < EMERGENCY.shedAt.at(-1) ? 0.55 : 1);
+  }
+  return shedCount;
 }

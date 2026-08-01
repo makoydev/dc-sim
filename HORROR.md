@@ -146,6 +146,52 @@ the zones start going. Light attracts nothing — it is blind — but light is h
 *you* stop walking into things, and the torch battery is a resource you will
 resent spending.
 
+### How it was built
+
+One hall-level reserve, drained against a capacity the bank's self-tests set:
+`capacity = duration × (0.72 + 0.37 × cabinets tested)`. Six emergency
+fittings, shed one at a time as the reserve falls past 0.62 / 0.48 / 0.34 /
+0.22 / 0.12, with the survivors dimming on a curve that stays flat until the
+bank is well down. Across the spots you actually stand in, a flat bank is 7x
+darker than a full one.
+
+| Cabinets tested | Down to one fitting | Ends the shift on |
+| --- | --- | --- |
+| none | 63% in (05:36) | 1 of 6, at minimum brightness |
+| one | 96% in (09:30) | 1 of 6 |
+| two | never | 3 of 6 |
+| all three | never | 4 of 6, at 83% |
+
+Four decisions worth keeping:
+
+- **Shedding, not dimming.** An even fade over nine minutes is something nobody
+  notices. A fitting going out is an event, and it lands with a line and an
+  alarm. It is also honest to the hardware: a UPS under strain drops
+  non-critical load rather than browning out everything equally.
+- **What survives points at the door.** The shed order works inward from the
+  far corners, and the fitting over the north exit is not on the list at all.
+  However bad it gets there is one light and two signs, so the hall never stops
+  being navigable — the torch stays a choice rather than a requirement.
+- **The self-test is not on the checklist.** Nights are two jobs and a
+  sign-off, and §7 is emphatic about not adding a third. Instead the cabinets
+  simply offer the test, and the prompt states the payoff outright — there is
+  no coach at night, so that one line is the entire teaching. It is optional,
+  loud, stationary work in a fixed corner of the floor, which makes it a real
+  decision rather than an errand.
+- **The first shed arrives while you can still act on it.** On an untested bank
+  it lands 27% in, with two thirds of the shift left. Warning a player about a
+  resource after the point they could do anything about it is just punishment.
+
+The cabinet screens are the only readout: at night `BATT %` stops being a
+trickle charge and becomes the countdown, and testing a cabinet visibly lifts
+both the number and the hall. There is no HUD element for any of this, on
+purpose — §7 again.
+
+**Still missing:** the half that needs persistence. The doc's original pitch was
+that self-tests *on the day shift* pay off at night, which no amount of work
+inside `game.js` can deliver while each shift is a fresh page load. What shipped
+is the self-contained version.
+
 ---
 
 ## 6. Death
@@ -206,6 +252,9 @@ Deliberately back to front. Step 3 before step 4 is the whole trick.
       enter containment, kills cooling to make you audible
 - [x] 4a — hiding places, muffled audio, and a look-arc while you are in them
 - [x] 5 — the partner: twelve radio lines, the silence, and what answers after
+- [x] 6 — light as a resource: the emergency rig on the UPS bank, shedding
+      fittings as it drains, and a self-test nobody asks you for that buys it
+      back (§5)
 
 The build order is finished.
 
@@ -284,6 +333,15 @@ heating. That is deliberate — see §2.
 - **Containment is checked on the player, not the entity.** Keeping the safe
   zone out of the nav graph entirely is what makes it reliable — it cannot path
   in, so it cannot glitch in.
+- **The first pass at the light budget was unreadable as a choice.** Testing
+  all three cabinets bought about 15% more runtime, which came out as one extra
+  fitting at the end — indistinguishable from noise. The per-test step went up
+  more than threefold. If a mechanic is optional and costs a walk across the
+  hall, the reward has to be obvious from across the hall too.
+- **`npm run lights` now samples the night as well.** The drain is a curve with
+  five thresholds on it, and arguing about whether it feels right is much easier
+  against a table of numbers than a screenshot. The fixture positions and the
+  shed logic are pure functions the tool reads directly, so it cannot drift.
 
 ---
 

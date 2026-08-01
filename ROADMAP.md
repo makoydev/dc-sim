@@ -52,6 +52,15 @@ Effort is a rough estimate for one person:
   presence director, the entity, hiding places, and Ramos on the radio. That
   is its own design doc — see [HORROR.md](./HORROR.md), whose build order is
   complete.
+- **Light as a resource.** The emergency rig now runs off the UPS bank, so the
+  night has a light budget: six fittings shed one at a time as it drains, and
+  self-testing a cabinet — which nothing on the checklist asks you to do — buys
+  the capacity back. An untested bank is down to its last light two thirds in;
+  a tested one still has four burning at the end. `npm run lights` samples the
+  drain so it can be tuned as numbers. (`world.js`, `game.js`, HORROR.md §5)
+- **1.8 Pause on blur.** Was already true when the roadmap claimed otherwise:
+  the loop gates every system on `player.locked` (`main.js:196`) and losing
+  pointer lock raises the pause overlay, so the shift clock does stop.
 
 ---
 
@@ -67,8 +76,8 @@ reused.
 | 1.4 | Tuning constants are scattered across modules (`SHIFT_SECONDS`, `INCIDENT_GAP` in `game.js`; `WALK`/`SPRINT`/`EYE` in `player.js`; `RANGE` in `interaction.js`). Pull them into one `config.js` so difficulty can be tuned — and eventually chosen by the player — in one place. | new `src/config.js` | S |
 | 1.5 | Incidents use bare `Math.random()`, so no two shifts can be compared and the smoke test is non-deterministic. A seeded PRNG gives reproducible runs, regression tests, and shareable "shift seeds". | `tasks.js:rollIncident`, `game.js` | S |
 | 1.6 | The walkthrough waypoints are hardcoded in `AISLES` and will silently drift if the rack layout in `racks.js:ROWS` changes. Derive them from the row definitions instead. | `tasks.js`, `racks.js` | S |
-| 1.8 | No pause-on-blur. Alt-tab away mid-shift and the clock keeps running (the SLA does not). | `main.js` | S |
 | 1.9 | Mouse sensitivity is a hardcoded `0.0022` with no way to change it, and there is no invert-Y. | `player.js`, settings UI | S |
+| 1.10 | Nothing persists — no `localStorage` anywhere. No settings, no best score, and "start another shift" is a `location.reload()`. It is also what blocks the other half of HORROR.md §5, where a day-shift self-test pays off at night. | `main.js`, new `src/save.js` | M |
 
 ---
 
@@ -246,25 +255,33 @@ report. It is a smoke test, not a suite.
 ## Good first tasks
 
 If someone new wants to pick this up: **5.1** (positional CRAC audio), **1.4**
-(central config), **6.3** (colour-blind safe status) and **1.8** (pause on
-blur) are all small, self-contained, and each makes the game noticeably better
-on its own.
+(central config) and **6.3** (colour-blind safe status) are all small,
+self-contained, and each makes the game noticeably better on its own.
 
 ## What I would do next
 
-1. **1.5 seeded RNG, then 1.4 central config.** Every balance question so far —
-   is the entity too fast, do incidents come too often, is the night long
-   enough — has been answered by feel, because no two shifts are comparable
-   and the knobs live in five files. This makes them measurable and gives
-   shareable shift seeds.
-2. **7.1 data-driven tasks**, before any new incident type is added. Task
-   behaviour still lives in a `switch` over `kind` in `game.js`, and that is
-   what makes section 2 expensive.
-3. **4.2 post-processing**, but only once someone reports frame-rate headroom
-   to spend. Bloom on the LEDs and screens would flatter the night shift more
-   than anything else on this list.
+The direction is to keep pushing the horror, so in order:
 
-Bigger question first, though: whether this stays a two-shift game that is
+1. **Camera review at the NOC.** HORROR.md §4 wants the thermal map to double
+   as a security camera, and §11 wants to watch the last ten minutes back. The
+   entity's position is already known every frame and `_paintNoc` already draws
+   the hall as a grid, so this is mostly a ring buffer. The risk/reward is the
+   good part: the only place to learn where it has been is a desk nowhere near
+   your work.
+2. **4.2 post-processing.** Bloom on the LEDs, screens and exit signs, plus a
+   vignette. The instancing and the resolution governor bought the frame-rate
+   headroom this was waiting on, and it flatters a dark hall more per hour than
+   anything else on the list — more so now the hall gets genuinely dark.
+3. **The tape library** (HORROR.md §11). A room the day shift never opens. The
+   night currently has nowhere to *go* — there is no genset room to walk to —
+   and this is the answer, but it is real geometry and belongs after the two
+   above.
+
+Off to the side, **1.10 persistence** is worth more than its size suggests: it
+is what unlocks the other half of §5, where the day shift's UPS self-tests are
+what keep the lights on at night.
+
+Bigger question still open: whether this stays a two-shift game that is
 finished, or becomes the career mode in 9.3. The simulation already tracks the
 state career mode would need, and that decision changes what is worth building
 next.

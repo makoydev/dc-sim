@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Screen } from './screen.js';
+import { rig, setEmergencyReserve } from './world.js';
 import {
   AISLES,
   ITEMS,
@@ -19,6 +20,15 @@ const SHIFT_START_HOUR = 8;
 const NIGHT_START_HOUR = 22; // 22:00 -> 10:00, though nobody stays that long
 const SHIFT_HOURS = 12;
 const INCIDENT_GAP = [55, 105];
+// The emergency lighting runs off the UPS bank, so the night has a light
+// budget — HORROR.md §5. An untested bank is down to its last fitting around
+// two thirds in; testing all three cabinets keeps four of six burning to the
+// end. The per-test step is deliberately large: the difference between
+// engaging with this at all and ignoring it should be most of the effect,
+// and the first shed lands early enough that there is still time to go and act
+// on it.
+const LIGHT_RESERVE_BASE = 0.72;
+const LIGHT_RESERVE_PER_TEST = 0.37;
 
 export class Game {
   constructor({
@@ -61,6 +71,8 @@ export class Game {
     this.stats = { resolved: 0, missed: 0, hotMinutes: 0, caught: 0 };
     this.nextIncidentAt = 30;
     this.handoverAdded = false;
+    this.lightReserve = 1;
+    this._shedCount = 0;
     this._screenAcc = 0;
     this._humLevel = 1;
     this._look = new THREE.Vector3();
@@ -85,6 +97,8 @@ export class Game {
     this.time = 0;
     this.tasks = createRoutineTasks(this.stations, mode);
     this.nextIncidentAt = 30;
+    this.lightReserve = 1;
+    this._shedCount = 0;
     this.hud.setCompact(mode === 'night');
     this.partner?.reset();
     this.hud.say(
@@ -132,6 +146,10 @@ export class Game {
     this._updateScreens(dt);
     this._updateHum();
     if (this.mode === 'night') {
+      // the reserve rewrites every fitting's intensity, so it has to settle
+      // before the director's flickers and blackouts paint over the top —
+      // otherwise a flicker gets stamped out again the same frame
+      this._updateEmergencyPower();
       this.partner?.update(this.progress);
       this.presence?.update(dt, this.progress);
       this._updateEntity(dt);
@@ -322,6 +340,35 @@ export class Game {
     this.player.velocity.set(0, 0, 0);
     this.noise = 0;
     this.hud.say('You come to by the door. An hour gone. The hall is warmer.', 'warn');
+  }
+
+  /**
+   * The emergency rig is on the UPS bank, so the light in the hall drains. The
+   * only way to slow it is to have self-tested a cabinet — routine maintenance
+   * that nobody asks you for and that costs you noise in a fixed corner of the
+   * floor. Doing the boring job early is what buys the back half of the shift.
+   */
+  _updateEmergencyPower() {
+    const tested = this.byKind('ups').filter((u) => u.selfTested).length;
+    const capacity = this.duration * (LIGHT_RESERVE_BASE + LIGHT_RESERVE_PER_TEST * tested);
+    this.lightReserve = THREE.MathUtils.clamp(1 - this.time / capacity, 0, 1);
+
+    const shed = setEmergencyReserve(this.lightReserve);
+    if (shed === this._shedCount) return;
+
+    const lit = rig.emergency.length - shed;
+    if (shed > this._shedCount) {
+      if (this._shedCount === 0) this.audio?.alarm();
+      this.hud.say(
+        lit > 1
+          ? `Another fitting drops off the bank. ${lit} lights left.`
+          : 'One light left, over the door.',
+        'bad',
+      );
+    } else {
+      this.hud.say('The bank picks the load back up. The lights lift.', 'good');
+    }
+    this._shedCount = shed;
   }
 
   /**
@@ -616,9 +663,28 @@ export class Game {
         },
       };
     }
+    // Nights never put this on the checklist and nobody asks for it, but a
+    // cabinet that passes a test carries the emergency lighting further into
+    // the shift. The hint has to state the payoff outright: there is no coach
+    // at night, so this prompt is the only place the trade is ever explained.
+    if (this.mode === 'night' && !ups.selfTested) {
+      return {
+        label: `Run a battery test — ${ups.label}`,
+        hint: `${Math.round(ups.charge * 100)}% · keeps the lights on longer`,
+        holdTime: 2.6,
+        run: () => {
+          ups.selfTested = true;
+          this.audio?.success();
+          this.hud.say(`${ups.label} takes the load. That is more light later.`, 'good');
+        },
+      };
+    }
+
     return {
       label: ups.label,
-      hint: `Battery ${Math.round(ups.charge * 100)}% · load ${Math.round(ups.load * 100)}%`,
+      hint: this.mode === 'night' && ups.selfTested
+        ? `${Math.round(ups.charge * 100)}% · carrying the lights`
+        : `Battery ${Math.round(ups.charge * 100)}% · load ${Math.round(ups.load * 100)}%`,
       disabled: true,
     };
   }
@@ -841,17 +907,25 @@ export class Game {
     }
 
     for (const ups of this.byKind('ups')) {
+      // At night this bank is carrying the emergency lighting, so the number on
+      // the cabinet stops being a trickle charge and becomes the countdown — it
+      // is the only readout of the light budget anywhere in the hall.
+      const carrying = this.mode === 'night' && !ups.onBattery;
       ups.charge = THREE.MathUtils.clamp(
-        ups.charge + (ups.onBattery ? -step * 0.006 : step * 0.002), 0, 1,
+        carrying
+          ? ups.charge + (this.lightReserve - ups.charge) * 0.5
+          : ups.charge + (ups.onBattery ? -step * 0.006 : step * 0.002),
+        0, 1,
       );
       if (!this._screenWorthPainting(ups.position)) continue;
+      const low = carrying && ups.charge < 0.35;
       ups.screen.paint((g, w, h) => {
-        Screen.bg(g, w, h, ups.onBattery ? '#1c1406' : '#06121a');
+        Screen.bg(g, w, h, ups.onBattery || low ? '#1c1406' : '#06121a');
         Screen.text(g, ups.label, 12, 28, 20, '#4cc2ff');
-        Screen.text(g, ups.onBattery ? 'ON BATTERY' : 'ON MAINS', 12, 54, 18,
-          ups.onBattery ? '#ffc247' : '#46d39a');
+        Screen.text(g, ups.onBattery ? 'ON BATTERY' : carrying ? 'CARRYING LIGHTING' : 'ON MAINS',
+          12, 54, 18, ups.onBattery || low ? '#ffc247' : '#46d39a');
         Screen.text(g, `LOAD ${Math.round(ups.load * 100)}%`, 12, 78, 16, '#d8e6f2');
-        Screen.bar(g, 12, 86, w - 24, 8, ups.charge, '#46d39a');
+        Screen.bar(g, 12, 86, w - 24, 8, ups.charge, low ? '#ff5f56' : '#46d39a');
         Screen.text(g, `BATT ${Math.round(ups.charge * 100)}%`, 12, h - 12, 15, '#7d93a6');
       });
     }
