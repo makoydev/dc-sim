@@ -58,6 +58,14 @@ Effort is a rough estimate for one person:
   the capacity back. An untested bank is down to its last light two thirds in;
   a tested one still has four burning at the end. `npm run lights` samples the
   drain so it can be tuned as numbers. (`world.js`, `game.js`, HORROR.md §5)
+- **4.2 Post-processing.** Bloom and a vignette, hand-rolled rather than pulled
+  from three's `addons/` — four fullscreen passes, three of them at quarter
+  resolution, and no new vendored files. It works on the tone-mapped image
+  rather than in linear light, which is the wrong place physically but makes
+  the pass colour-neutral by construction: at strength 0 the composite hands
+  back exactly the pixels the game drew before. `P` toggles it, and the
+  resolution governor switches it off by itself if it bottoms out and frames
+  are still dropping. (`post.js`)
 - **The camera loop.** The NOC thermal map is now the building's only camera:
   a live cold spot at night, plus a four-minute recording of both your track
   and its that can be played back at the desk. Finishes on how close it got
@@ -147,8 +155,6 @@ first-order approach to a target temperature (`game.js:_updateThermals`).
 
 Currently ~300 draw calls of unmerged boxes, no instancing, no post-processing.
 
-- **4.2 Post-processing pass (M).** Subtle bloom on the LEDs and screens, and a
-  vignette. This is the single biggest visual-payoff-per-hour change available.
 - **4.3 Screen-space ambient occlusion (M).** Or, much cheaper, a darkened decal
   under each cabinet — see 1.3.
 - **4.4 Level of detail (S).** Racks past ~20 m do not need front-panel textures.
@@ -266,14 +272,15 @@ self-contained, and each makes the game noticeably better on its own.
 
 The direction is to keep pushing the horror, so in order:
 
-1. **4.2 post-processing.** Bloom on the LEDs, screens and exit signs, plus a
-   vignette. The instancing and the resolution governor bought the frame-rate
-   headroom this was waiting on, and it flatters a dark hall more per hour than
-   anything else on the list — more so now the hall genuinely goes dark.
-2. **The tape library** (HORROR.md §11). A room the day shift never opens. The
+0. **Look at the bloom on a real GPU.** It shipped without ever being rendered —
+   there is no WebGL in the environment it was written in, so the shaders
+   themselves are unverified. The numbers in `post.js:LOOK` are guesses and
+   almost certainly want tuning by eye. `P` toggles it and F3 reports whether
+   it is on.
+1. **The tape library** (HORROR.md §11). A room the day shift never opens. The
    night has nowhere to *go* — there is no genset room to walk to — and this is
-   the answer, but it is real geometry and belongs after the above.
-3. **5.1 positional audio.** Currently the night's central rule, *the fans cover
+   the answer, but it is real geometry.
+2. **5.1 positional audio.** Currently the night's central rule, *the fans cover
    you*, is something you are told rather than something you hear. Putting the
    hum on the CRACs makes the masking system legible by ear, which is where it
    should have been all along.

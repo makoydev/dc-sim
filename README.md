@@ -26,6 +26,7 @@ The game needs to be served over HTTP (ES modules + import maps); opening
 | `E` | Interact |
 | `F` | Torch (night shift) |
 | `E` | Hide in a cabinet or under a bench (night), `E` again to come out |
+| `P` | Bloom and vignette on / off |
 | `F3` | Frame rate, draw calls, resolution scale |
 | `Tab` | Toggle checklist |
 | `Esc` | Release pointer |
@@ -77,6 +78,7 @@ src/audio.js        synthesised hum, pagers, footsteps and night sounds
 src/torch.js        the hand torch and its battery
 src/presence.js     night-shift director — flickers, footsteps, phantom faults
 src/perf.js         frame-rate governor and the F3 stats overlay
+src/post.js         hand-rolled bloom and vignette, four fullscreen passes
 src/partner.js      Ramos on the radio, and whatever answers after
 src/coach.js        the day shift's contextual teaching hints
 src/entity.js       the thing that hunts by sound, and its aisle nav graph

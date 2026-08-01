@@ -774,4 +774,71 @@ const { inContainment } = await import('../src/world.js');
   console.log('camera loop OK · records both tracks, rolls, plays back, day shift clean');
 }
 
+// ---- post-processing --------------------------------------------------------
+// No WebGL here, so the shaders themselves are unverified — this covers the
+// control flow around them: pass order, target sizing, and the one that would
+// otherwise show up as a black screen, leaving a render target bound at the end.
+
+{
+  const { Post, POST_PASSES } = await import('../src/post.js');
+
+  const calls = [];
+  let bound = 'canvas';
+  const stubRenderer = {
+    _w: 1280,
+    _h: 720,
+    getDrawingBufferSize(v) { v.set(this._w, this._h); return v; },
+    setRenderTarget(t) { bound = t; },
+    clear() {},
+    render(s, c) { calls.push({ target: bound, scene: s, camera: c }); },
+  };
+
+  const post = new Post(stubRenderer, scene, camera);
+  post.render();
+
+  if (calls.length !== POST_PASSES + 1) {
+    fail(`post ran ${calls.length} draws, expected ${POST_PASSES + 1} (scene + passes)`);
+  }
+  if (calls[0].scene !== scene || calls[0].camera !== camera) {
+    fail('the first pass did not draw the hall');
+  }
+  if (calls[0].target !== post.sceneTarget) fail('the hall was not rendered offscreen');
+  if (calls.at(-1).target !== null) fail('post left a render target bound — screen stays black');
+  if (calls.slice(1).some((c) => c.scene === scene)) {
+    fail('the hall was drawn more than once');
+  }
+
+  // bloom works at a fraction of the frame, which is the whole reason it is
+  // affordable at all
+  if (post.sceneTarget.width !== 1280 || post.sceneTarget.height !== 720) {
+    fail(`scene target is ${post.sceneTarget.width}x${post.sceneTarget.height}, not the frame`);
+  }
+  if (post.bloomA.width >= post.sceneTarget.width) fail('the bloom target is not downsampled');
+  if (post.bloomA.width !== post.bloomB.width) fail('the two bloom targets disagree in size');
+
+  // the resolution governor moves the drawing buffer underneath it
+  stubRenderer._w = 800;
+  stubRenderer._h = 450;
+  post.render();
+  if (post.sceneTarget.width !== 800) fail('post did not follow the drawing buffer down');
+  if (post.bloomA.width !== Math.floor(800 / 4)) fail('bloom target did not resize with it');
+
+  // and it has to be switchable, because none of this is verified on a GPU
+  calls.length = 0;
+  post.toggle();
+  if (post.enabled) fail('the toggle did not switch post off');
+  post.render();
+  if (calls.length !== 1) fail('post kept running its passes while disabled');
+  if (calls[0].target !== null) fail('a disabled post pass still rendered offscreen');
+
+  // day and night want visibly different amounts of it
+  post.setMode('night');
+  const night = post.composite.uniforms.uStrength.value;
+  post.setMode('day');
+  if (!(night > post.composite.uniforms.uStrength.value)) {
+    fail('night is not bloomier than day');
+  }
+  console.log(`post OK · ${POST_PASSES} passes, downsampled, follows the governor, switchable`);
+}
+
 console.log('smoke test OK');

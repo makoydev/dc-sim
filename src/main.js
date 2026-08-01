@@ -12,6 +12,7 @@ import { Torch } from './torch.js';
 import { Presence } from './presence.js';
 import { Entity } from './entity.js';
 import { Perf } from './perf.js';
+import { Post } from './post.js';
 import { Partner } from './partner.js';
 import { Coach } from './coach.js';
 
@@ -48,6 +49,8 @@ const game = new Game({
 const interaction = new Interaction(camera, scene, (target) => game.resolveAction(target));
 const highlighter = new Highlighter(scene);
 const perf = new Perf(renderer, camera);
+const post = new Post(renderer, scene, camera);
+perf.postEnabled = () => post.enabled;
 
 player.onFootstep = (sprinting) => {
   audio.footstep(sprinting);
@@ -75,6 +78,7 @@ const CONTROLS = `
     <b>E</b><span>interact — hold for longer jobs</span>
     <b>F</b><span>torch (nights only — the battery is finite)</span>
     <b>Tab</b><span>show / hide the checklist</span>
+    <b>P</b><span>bloom and vignette on / off</span>
     <b>F3</b><span>frame rate and draw calls</span>
     <b>Esc</b><span>pause</span>
   </div>`;
@@ -87,6 +91,7 @@ function beginShift(mode) {
     ? new THREE.Fog(0x03050a, 6, 34)
     : new THREE.Fog(0x0a121a, 26, 80);
   renderer.toneMappingExposure = mode === 'night' ? 1.0 : 1.14;
+  post.setMode(mode);
   torch.on = mode === 'night';
   coach.start(mode);
   game.start(mode);
@@ -175,6 +180,10 @@ document.addEventListener('player-lock', (e) => {
 
 addEventListener('keydown', (e) => {
   if (e.code === 'Tab') hud.toggleChecklist();
+  // bloom and vignette cost fill rate, and taste varies — leave a way out
+  if (e.code === 'KeyP' && !e.repeat) {
+    hud.say(`Bloom and vignette ${post.toggle() ? 'on' : 'off'}.`);
+  }
   // while hidden the crosshair is useless, so E is wired straight to getting out
   if (e.code === 'KeyE' && !e.repeat && game.hidden) game.exitHiding();
 });
@@ -263,7 +272,14 @@ function frame() {
     showReport(game.report);
   }
 
-  renderer.render(scene, camera);
+  // last resort: the resolution governor has bottomed out and frames are still
+  // dropping, so the fill rate the bloom is eating is the next thing to give up
+  if (post.enabled && perf.exhausted && perf.fps < 40) {
+    post.enabled = false;
+    hud.say('Frame rate is struggling — bloom off. P puts it back.', 'warn');
+  }
+
+  post.render();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

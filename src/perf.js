@@ -32,6 +32,11 @@ export class Perf {
     this.renderer.setPixelRatio(this.ceiling * this.scale);
   }
 
+  /** Resolution has nothing left to give; whatever is next has to go instead. */
+  get exhausted() {
+    return this.scale <= MIN_SCALE;
+  }
+
   update(dt) {
     this.frames++;
     this.accum += dt;
@@ -76,6 +81,7 @@ export class Perf {
       <span>calls ${info.render.calls}</span>
       <span>tris ${info.render.triangles.toLocaleString()}</span>
       <span>dpr ${(this.ceiling * this.scale).toFixed(2)}</span>
+      <span>post ${this.postEnabled?.() ? 'on' : 'off'}</span>
       <span>progs ${info.programs?.length ?? 0}</span>
       <span>tex ${info.memory.textures}</span>`;
   }
