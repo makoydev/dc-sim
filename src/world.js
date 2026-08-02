@@ -4,16 +4,62 @@ import { registerPickable } from './pickables.js';
 
 export const HALL = { minX: -13, maxX: 13, minZ: -11, maxZ: 11, height: 4.2 };
 
+/**
+ * The tape archive, through the south wall. A room the day shift never opens —
+ * there is no cooling in it, which is the whole point: the fan wall that covers
+ * your noise everywhere else does not reach in here.
+ */
+export const TAPE_LIBRARY = { minX: 2.5, maxX: 10.7, minZ: 11.4, maxZ: 17.6, height: 3.0 };
+
+/** The gap in the south wall, and the only way in or out of the archive. */
+export const TAPE_DOOR = { minX: 5.4, maxX: 7.8 };
+
+export function inTapeLibrary(position) {
+  return position.z > HALL.maxZ
+    && position.x > TAPE_LIBRARY.minX
+    && position.x < TAPE_LIBRARY.maxX;
+}
+
 /** Axis-aligned boxes the player cannot walk through. */
 export const colliders = [];
 
 export function addCollider(cx, cz, sx, sz) {
-  colliders.push({
+  const box = {
     minX: cx - sx / 2,
     maxX: cx + sx / 2,
     minZ: cz - sz / 2,
     maxZ: cz + sz / 2,
-  });
+    open: false,
+  };
+  colliders.push(box);
+  return box;
+}
+
+/**
+ * Keeps the player inside the building rather than inside one room. Two boxes
+ * joined by a gap: which one applies is decided by z, and the doorway strip is
+ * the only x where the seam between them is not a wall.
+ */
+export function clampToRooms(position, pad) {
+  const clamp = THREE.MathUtils.clamp;
+  const throughDoor = position.x > TAPE_DOOR.minX + pad
+    && position.x < TAPE_DOOR.maxX - pad;
+
+  if (position.z > HALL.maxZ) {
+    position.x = clamp(position.x, TAPE_LIBRARY.minX + pad, TAPE_LIBRARY.maxX - pad);
+    position.z = clamp(
+      position.z,
+      throughDoor ? HALL.minZ + pad : TAPE_LIBRARY.minZ + pad,
+      TAPE_LIBRARY.maxZ - pad,
+    );
+    return;
+  }
+  position.x = clamp(position.x, HALL.minX + pad, HALL.maxX - pad);
+  position.z = clamp(
+    position.z,
+    HALL.minZ + pad,
+    throughDoor ? TAPE_LIBRARY.maxZ - pad : HALL.maxZ - pad,
+  );
 }
 
 function wall(scene, mat, w, h, d, x, y, z) {
@@ -56,14 +102,46 @@ export function buildHall(scene) {
   });
   const t = 0.4;
   wall(scene, wallMat, w + t * 2, height, t, cx, height / 2, minZ - t / 2);
-  wall(scene, wallMat, w + t * 2, height, t, cx, height / 2, maxZ + t / 2);
   wall(scene, wallMat, t, height, d, minX - t / 2, height / 2, cz);
   wall(scene, wallMat, t, height, d, maxX + t / 2, height / 2, cz);
 
+  // the south wall comes in two pieces, with the archive door between them
+  for (const [from, to] of [[minX - t, TAPE_DOOR.minX], [TAPE_DOOR.maxX, maxX + t]]) {
+    wall(scene, wallMat, to - from, height, t, (from + to) / 2, height / 2, maxZ + t / 2);
+  }
+
   buildCeilingRig(scene);
   buildContainment(scene);
+  buildTapeLibrary(scene, wallMat, floorMat, ceilMat, t);
   buildLighting(scene);
   return { floor, ceiling };
+}
+
+/**
+ * A low, dead room. Nothing in here is cooled, so nothing in here is loud —
+ * see Game#masking, which is where that actually bites.
+ */
+function buildTapeLibrary(scene, wallMat, floorMat, ceilMat, t) {
+  const { minX, maxX, minZ, maxZ, height } = TAPE_LIBRARY;
+  const w = maxX - minX;
+  const d = maxZ - minZ;
+  const cx = (minX + maxX) / 2;
+  const cz = (minZ + maxZ) / 2;
+
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), floorMat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(cx, 0, cz);
+  scene.add(floor);
+  registerPickable(floor);
+
+  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(w, d), ceilMat);
+  ceiling.rotation.x = Math.PI / 2;
+  ceiling.position.set(cx, height, cz);
+  scene.add(ceiling);
+
+  wall(scene, wallMat, t, height, d + t * 2, minX - t / 2, height / 2, cz);
+  wall(scene, wallMat, t, height, d + t * 2, maxX + t / 2, height / 2, cz);
+  wall(scene, wallMat, w + t * 2, height, t, cx, height / 2, maxZ + t / 2);
 }
 
 /**
@@ -200,10 +278,12 @@ export const EMERGENCY = {
   bulb: 0xffb26b,
   sign: 0x35ff8a,
   // A draining bank sheds non-critical load rather than browning everything out
-  // equally, so fittings go dark one at a time. Ordered furthest-from-the-door
-  // first: whatever is still burning always points at the way out.
-  shedOrder: [1, 3, 0, 2, 5],
-  shedAt: [0.62, 0.48, 0.34, 0.22, 0.12],
+  // equally, so fittings go dark one at a time. The archive goes first — it is
+  // the least critical load in the building and nobody is supposed to be in
+  // there — and after that it works inward from the far corners, so whatever is
+  // still burning always points at the way out.
+  shedOrder: [6, 1, 3, 0, 2, 5],
+  shedAt: [0.70, 0.58, 0.46, 0.34, 0.22, 0.12],
   floor: 0.3, // dimmest the survivors ever get, as a fraction of `full`
   knee: 0.6, // above this the hall still looks like it did at 22:00
 };
@@ -218,6 +298,8 @@ function emergencySpots() {
     [minX + 1.5, minZ + 4], [minX + 1.5, maxZ - 4],
     [maxX - 1.5, minZ + 4], [maxX - 1.5, maxZ - 4],
     [0, minZ + 1.5], [0, maxZ - 1.5],
+    // index 6: the archive, and the first thing the bank lets go of
+    [(TAPE_LIBRARY.minX + TAPE_LIBRARY.maxX) / 2, TAPE_LIBRARY.minZ + 2.8],
   ];
 }
 

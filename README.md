@@ -42,7 +42,9 @@ cabinet will hide you. The emergency lighting runs off the UPS bank, so it goes
 out fitting by fitting as the night wears on — unless you find the time to
 self-test the cabinets, which nothing on the checklist will ask you to do. The
 thermal map at the NOC desk is the only camera in the building, and it has been
-recording. See [HORROR.md](./HORROR.md).
+recording. Through the south wall there is a tape archive with no cooling in it,
+which means nothing in there is covering the noise you make — the spare torch
+cells are at the back of it. See [HORROR.md](./HORROR.md).
 
 ## The shift
 
@@ -62,7 +64,7 @@ NOC desk before 20:00 to close out the shift and get graded.
 ```
 index.html          import map + canvas
 src/main.js         bootstrap, overlays, main loop
-src/world.js        hall shell, lighting, collider registry
+src/world.js        hall shell, tape archive, lighting, collider registry
 src/racks.js        rack rows and status LEDs
 src/props.js        CRACs, UPS bank, PDUs, NOC desk, spares, coffee
 src/player.js       first-person controller and AABB collision

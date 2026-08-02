@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { addCollider } from './world.js';
+import { addCollider, HALL, TAPE_DOOR, TAPE_LIBRARY } from './world.js';
 import { Screen } from './screen.js';
 import { registerPickable } from './pickables.js';
 
@@ -432,7 +432,173 @@ export function buildProps(scene) {
     addCollider(bx, bz, bry === 0 ? 2.2 : 0.85, bry === 0 ? 0.85 : 2.2);
   }
 
-  return { stations, fans, screens };
+  // ---- the tape archive, through the south wall ----------------------------
+  const doorway = buildTapeArchive(scene, { add, hideSpot });
+
+  return { stations, fans, screens, doorway };
+}
+
+/**
+ * The archive. Nothing in here is on the checklist and nothing in here is
+ * cooled, which is the whole reason to build it: it is the one room where the
+ * fan wall is not covering the noise you make.
+ *
+ * The reason to walk in is the spare torch cells. The torch is the only
+ * reliable light once the bank starts shedding zones, and the cells for it are
+ * kept in the quietest, darkest room in the building. That trade is the room.
+ */
+function buildTapeArchive(scene, { add, hideSpot }) {
+  const { minX, maxX, minZ, maxZ } = TAPE_LIBRARY;
+  const cx = (minX + maxX) / 2;
+
+  // the door itself: shut and badged by day, standing open by the time you
+  // come on at night, which nobody has an explanation for
+  const doorGroup = new THREE.Group();
+  doorGroup.position.set(TAPE_DOOR.minX, 0, HALL.maxZ + 0.2);
+  scene.add(doorGroup);
+  const leaf = box(doorGroup, TAPE_DOOR.maxX - TAPE_DOOR.minX, 2.4, 0.08,
+    (TAPE_DOOR.maxX - TAPE_DOOR.minX) / 2, 1.2, 0, MAT.trim);
+  box(doorGroup, 0.06, 0.3, 0.05, TAPE_DOOR.maxX - TAPE_DOOR.minX - 0.18, 1.05, 0.08, MAT.case);
+
+  const blocker = addCollider(cx, HALL.maxZ + 0.2, TAPE_DOOR.maxX - TAPE_DOOR.minX, 0.4);
+  const door = add({
+    id: 'TAPE-DOOR',
+    kind: 'tapedoor',
+    label: 'Tape Archive',
+    position: new THREE.Vector3(cx, 1.2, HALL.maxZ + 0.2),
+    mesh: leaf,
+    blocker,
+    group: doorGroup,
+  }, doorGroup);
+
+  // Two double-sided runs of cartridges, leaving a 1.5 m corridor down each
+  // side and an open strip at the back. Aisles you can actually be cornered in.
+  //
+  // There are 160-odd cartridges and they are one instanced draw, for the same
+  // reason the racks are — see tools/perf-check.mjs, which caught this as a
+  // 180-call regression when they were separate meshes.
+  const runs = [minZ + 1.8, minZ + 3.6];
+  const perShelf = 17;
+  const shelves = 5;
+  const carts = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(0.22, 0.3, 0.32),
+    new THREE.MeshStandardMaterial({ color: 0x1a2028, roughness: 0.85, metalness: 0.1 }),
+    runs.length * shelves * perShelf,
+  );
+  carts.frustumCulled = false;
+  scene.add(carts);
+
+  const m = new THREE.Matrix4();
+  const spine = new THREE.Color(0x1a2028);
+  const worn = new THREE.Color(0x0d1116);
+  const labelled = new THREE.Color(0x3a4654);
+  let n = 0;
+
+  // the boards and uprights are repeated furniture too, so they get the same
+  // treatment: two draws for both runs rather than sixteen meshes
+  const boards = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(5.1, 0.04, 0.86), MAT.case, runs.length * (shelves + 1),
+  );
+  const uprights = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(0.09, 2.05, 0.9), MAT.case, runs.length * 3,
+  );
+  for (const mesh of [boards, uprights]) {
+    mesh.frustumCulled = false;
+    scene.add(mesh);
+  }
+  let boardN = 0;
+  let uprightN = 0;
+
+  for (const z of runs) {
+    for (const x of [-2.5, 0, 2.5]) {
+      m.makeTranslation(cx + x, 1.02, z);
+      uprights.setMatrixAt(uprightN++, m);
+    }
+    m.makeTranslation(cx, 2.05, z);
+    boards.setMatrixAt(boardN++, m);
+    for (let shelf = 0; shelf < shelves; shelf++) {
+      const y = 0.36 + shelf * 0.42;
+      m.makeTranslation(cx, y, z);
+      boards.setMatrixAt(boardN++, m);
+      for (let i = 0; i < perShelf; i++) {
+        // gaps where tapes are signed out, so the runs are not a solid wall
+        if ((i + shelf) % 7 === 3) continue;
+        m.makeTranslation(cx - 2.24 + i * 0.28, y + 0.17, z);
+        carts.setMatrixAt(n, m);
+        carts.setColorAt(n, (i + shelf) % 3 === 0 ? worn : (i % 5 === 1 ? labelled : spine));
+        n++;
+      }
+    }
+    addCollider(cx, z, 5.2, 0.9);
+  }
+  carts.count = n;
+  carts.instanceMatrix.needsUpdate = true;
+  if (carts.instanceColor) carts.instanceColor.needsUpdate = true;
+  boards.count = boardN;
+  boards.instanceMatrix.needsUpdate = true;
+  uprights.count = uprightN;
+  uprights.instanceMatrix.needsUpdate = true;
+
+  // the spare cells, on a bench in the open strip at the back
+  const benchX = minX + 2.1;
+  const benchZ = maxZ - 0.8;
+  const bench = new THREE.Group();
+  bench.position.set(benchX, 0, benchZ);
+  scene.add(bench);
+  box(bench, 1.8, 0.08, 0.7, 0, 0.92, 0, MAT.trim);
+  for (const x of [-0.8, 0.8]) box(bench, 0.08, 0.92, 0.08, x, 0.46, 0, MAT.case);
+  const cells = [];
+  for (let i = 0; i < 2; i++) {
+    const cell = box(bench, 0.16, 0.22, 0.16, -0.35 + i * 0.42, 1.07, 0, MAT.case);
+    cell.material = new THREE.MeshStandardMaterial({
+      color: 0x2f7ad6, roughness: 0.6, metalness: 0.3,
+    });
+    cells.push(cell);
+  }
+  add({
+    id: 'TAPE-CELLS',
+    kind: 'cells',
+    label: 'Torch cells',
+    position: new THREE.Vector3(benchX, 1.0, benchZ),
+    mesh: bench.children[0],
+    cells,
+    remaining: cells.length,
+  }, bench);
+  addCollider(benchX, benchZ, 1.8, 0.7);
+
+  // one way out and a hunter that can follow you in, so there has to be
+  // somewhere to get off the floor
+  const hx = maxX - 0.9;
+  const hz = maxZ - 1.1;
+  const cab = new THREE.Group();
+  cab.position.set(hx, 0, hz);
+  cab.rotation.y = -Math.PI / 2;
+  scene.add(cab);
+  const body = box(cab, 1.0, 2.05, 0.66, 0, 1.02, 0, MAT.case);
+  box(cab, 1.04, 0.06, 0.7, 0, 2.06, 0, MAT.trim);
+  for (const side of [-1, 1]) {
+    box(cab, 0.48, 1.9, 0.04, side * 0.25, 1.02, 0.34, MAT.trim);
+  }
+  hideSpot(
+    {
+      id: 'HIDE-CAB-ARCHIVE',
+      kind: 'hide',
+      label: 'Media Cabinet',
+      position: new THREE.Vector3(hx, 1.1, hz),
+      mesh: body,
+    },
+    {
+      root: cab,
+      under: false,
+      camera: new THREE.Vector3(hx, 1.24, hz),
+      exit: new THREE.Vector3(hx - 1.15, 0, hz),
+      yaw: Math.PI / 2,
+      arc: 0.75,
+    },
+  );
+  addCollider(hx, hz, 0.66, 1.0);
+
+  return door;
 }
 
 export function updateFans(fans, dt, running = true) {

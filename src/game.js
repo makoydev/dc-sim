@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Screen } from './screen.js';
-import { HALL, rig, setEmergencyReserve } from './world.js';
+import { HALL, inTapeLibrary, rig, setEmergencyReserve } from './world.js';
 import {
   AISLES,
   ITEMS,
@@ -39,8 +39,9 @@ const REVIEW_SECONDS = 11;
 
 export class Game {
   constructor({
-    scene, camera, player, racks, stations, hud, audio, presence, entity, partner,
+    scene, camera, player, racks, stations, hud, audio, presence, entity, partner, torch,
   }) {
+    this.torch = torch ?? null;
     this.scene = scene;
     this.camera = camera;
     this.player = player;
@@ -112,6 +113,7 @@ export class Game {
     this.track = [];
     this.review = null;
     this._trackAcc = 0;
+    this._setArchiveDoor(mode === 'night');
     this.hud.setCompact(mode === 'night');
     this.partner?.reset();
     this.hud.say(
@@ -257,6 +259,10 @@ export class Game {
    * reason a CRAC failure is frightening rather than just hot.
    */
   get masking() {
+    // Nothing in the archive is cooled, so nothing in the archive is covering
+    // you. Every step you take in there carries almost in full — it is the same
+    // rule as a tripped CRAC, applied to a whole room.
+    if (inTapeLibrary(this.player.position)) return 0.08;
     return 0.25 + this._humLevel * 0.55;
   }
 
@@ -383,9 +389,11 @@ export class Game {
     if (shed > this._shedCount) {
       if (this._shedCount === 0) this.audio?.alarm();
       this.hud.say(
-        lit > 1
-          ? `Another fitting drops off the bank. ${lit} lights left.`
-          : 'One light left, over the door.',
+        // the archive goes first, and knowing that is worth its own line: if
+        // you were going to go for a cell, you are now going in the dark
+        this._shedCount === 0 ? 'The archive light drops. Nothing back there now.'
+          : lit > 1 ? `Another fitting drops off the bank. ${lit} lights left.`
+            : 'One light left, over the door.',
         'bad',
       );
     } else {
@@ -597,6 +605,10 @@ export class Game {
         return this._fireAction(station);
       case 'coffee':
         return this._coffeeAction(station);
+      case 'cells':
+        return this._cellsAction(station);
+      case 'tapedoor':
+        return this._tapeDoorAction(station);
       case 'noc':
         return this._nocAction(station);
       case 'hide':
@@ -811,6 +823,54 @@ export class Game {
         else this.hud.say('Coffee acquired.', 'good');
       },
     };
+  }
+
+  /**
+   * Why the archive exists. The torch is the only reliable light once the bank
+   * starts shedding zones, and its spare cells live in the one room where
+   * nothing covers the noise you make getting to them.
+   */
+  _cellsAction(station) {
+    if (this.mode !== 'night') {
+      return { label: station.label, hint: 'For the night torch. Not your problem today.', disabled: true };
+    }
+    if (station.remaining <= 0) {
+      return { label: station.label, hint: 'Shelf is empty', disabled: true };
+    }
+    if (this.torch && this.torch.battery > 0.85) {
+      return { label: station.label, hint: 'The cell in your torch is still good', disabled: true };
+    }
+    return {
+      label: 'Take a fresh cell',
+      hint: `${station.remaining} left on the shelf`,
+      holdTime: 2.2,
+      run: () => {
+        station.remaining--;
+        const spent = station.cells[station.remaining];
+        spent?.parent?.remove(spent);
+        if (this.torch) this.torch.battery = 1;
+        this.audio?.success();
+        this.hud.say('Fresh cell in the torch.', 'good');
+      },
+    };
+  }
+
+  _tapeDoorAction(door) {
+    return {
+      label: door.label,
+      hint: this.mode === 'night'
+        ? 'Standing open. It was not you who opened it.'
+        : 'Badged shut. Nobody goes in there on days.',
+      disabled: true,
+    };
+  }
+
+  /** Shut and badged by day; already open by the time you come on at night. */
+  _setArchiveDoor(open) {
+    const door = this.stations.find((s) => s.kind === 'tapedoor');
+    if (!door) return;
+    door.blocker.open = open;
+    if (door.group) door.group.rotation.y = open ? -Math.PI / 2.2 : 0;
   }
 
   _nocAction() {
@@ -1038,6 +1098,14 @@ export class Game {
     if (this._screenWorthPainting(this.noc.position)) this._paintNoc();
   }
 
+  /**
+   * The thermal map only covers the hall. Anything in the archive is simply off
+   * the map — which is worth more than clamping it to the edge would be.
+   */
+  _onCamera(hx, hz) {
+    return hx >= HALL.minX && hx <= HALL.maxX && hz >= HALL.minZ && hz <= HALL.maxZ;
+  }
+
   /** Hall floor coordinates onto a rectangle of a screen. */
   _hallToMap(hx, hz, x, y, w, h) {
     return {
@@ -1085,26 +1153,29 @@ export class Game {
     g.globalAlpha = 0.45;
     g.fillStyle = '#2f6b52';
     for (const f of shown) {
+      if (!this._onCamera(f.px, f.pz)) continue;
       const p = put(f.px, f.pz);
       g.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
     }
     g.globalAlpha = 0.5;
     g.fillStyle = '#4cc2ff';
     for (const f of shown) {
-      if (f.ex === null) continue;
+      if (f.ex === null || !this._onCamera(f.ex, f.ez)) continue;
       const p = put(f.ex, f.ez);
       g.fillRect(p.x - 2, p.y - 2, 4, 4);
     }
     g.globalAlpha = 1;
 
-    if (head) {
+    // the two heads are independent: either of you can be off the map, and
+    // being the one that is off it is not reassuring
+    if (head && this._onCamera(head.px, head.pz)) {
       const you = put(head.px, head.pz);
       g.fillStyle = '#46d39a';
       g.fillRect(you.x - 2.5, you.y - 2.5, 5, 5);
-      if (head.ex !== null) {
-        const it = put(head.ex, head.ez);
-        this._paintColdSpot(g, it.x, it.y);
-      }
+    }
+    if (head && head.ex !== null && this._onCamera(head.ex, head.ez)) {
+      const it = put(head.ex, head.ez);
+      this._paintColdSpot(g, it.x, it.y);
     }
 
     const near = this.closestApproach(shown);
@@ -1145,10 +1216,10 @@ export class Game {
       // §4: the map is also the only camera. It reads as a cold spot because
       // whatever it is does not register as heat — visible from this desk and
       // nowhere else in the hall.
-      if (this.mode === 'night' && this.entity && this.entity.state !== 'dormant') {
-        const at = this._hallToMap(
-          this.entity.position.x, this.entity.position.z, 14, 44, w - 28, 106,
-        );
+      const it = this.entity;
+      if (this.mode === 'night' && it && it.state !== 'dormant'
+          && this._onCamera(it.position.x, it.position.z)) {
+        const at = this._hallToMap(it.position.x, it.position.z, 14, 44, w - 28, 106);
         this._paintColdSpot(g, at.x, at.y);
       }
       Screen.text(g, `AVG ${this.hallTemp.toFixed(1)}C`, 14, h - 14, 17, '#d8e6f2');

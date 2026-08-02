@@ -841,4 +841,124 @@ const { inContainment } = await import('../src/world.js');
   console.log(`post OK · ${POST_PASSES} passes, downsampled, follows the governor, switchable`);
 }
 
+// ---- the tape archive -------------------------------------------------------
+
+{
+  const { Entity } = await import('../src/entity.js');
+  const { TAPE_LIBRARY, TAPE_DOOR, inTapeLibrary } = await import('../src/world.js');
+  const torch = { battery: 0.2 };
+  const arc = new Game({
+    scene, camera, player, racks, stations, hud, audio: null, torch,
+    presence: null, entity: new Entity({ scene, player, racks, hud, audio: null }),
+  });
+
+  const doorX = (TAPE_DOOR.minX + TAPE_DOOR.maxX) / 2;
+  // walk from the hall towards the south wall and report where you end up
+  const walkSouthFrom = (x) => {
+    player.position.set(x, 1.68, 8.5);
+    player.velocity.set(0, 0, 0);
+    for (let i = 0; i < 400; i++) player._move(0, 0.05);
+    return player.position.clone();
+  };
+
+  setLightingMode('night');
+  arc.start('night');
+
+  const throughDoor = walkSouthFrom(doorX);
+  if (!inTapeLibrary(throughDoor)) {
+    fail(`the door does not lead anywhere: ended at z ${throughDoor.z.toFixed(2)}`);
+  }
+  if (throughDoor.z > TAPE_LIBRARY.maxZ) fail('walked straight through the back wall');
+
+  // Walking head-on into a long obstacle must stop you, not slide you along it.
+  // Resolving per axis by "which half of the box am I in" used to put you level
+  // with whichever end of the shelf run you were nearer — a 3 m sideways jump.
+  for (const x of [6.0, 6.6, 7.2]) {
+    const landed = walkSouthFrom(x);
+    if (Math.abs(landed.x - x) > 0.05) {
+      fail(`walking straight into the shelving slid the player from x ${x} to ${landed.x.toFixed(2)}`);
+    }
+  }
+
+  // the rest of the south wall is still a wall
+  const intoWall = walkSouthFrom(-6);
+  if (inTapeLibrary(intoWall)) fail('the south wall let the player through away from the door');
+  if (intoWall.z > 11) fail('the player left the hall through solid wall');
+
+  // and you can get back out again
+  player.position.set(doorX, 1.68, TAPE_LIBRARY.minZ + 1);
+  for (let i = 0; i < 400; i++) player._move(0, -0.05);
+  if (inTapeLibrary(player.position)) fail('the archive is a one-way trip');
+
+  // by day it is shut
+  setLightingMode('day');
+  arc.start('day');
+  const byDay = walkSouthFrom(doorX);
+  if (inTapeLibrary(byDay)) fail('the day shift got into the room it never opens');
+
+  // ---- what the room is for ----
+  setLightingMode('night');
+  arc.start('night');
+  const cells = stations.find((s) => s.kind === 'cells');
+  if (!cells) fail('no spare cells in the archive');
+  if (!inTapeLibrary(cells.position)) fail('the spare cells are not in the archive');
+
+  // nothing in there is cooled, so nothing in there is covering you
+  player.position.set(0, 1.68, 0);
+  const inHall = arc.masking;
+  player.position.copy(cells.position);
+  const inArchive = arc.masking;
+  if (!(inArchive < inHall * 0.5)) {
+    fail(`the archive masks noise at ${inArchive.toFixed(2)} vs ${inHall.toFixed(2)} in the hall`);
+  }
+
+  // the cells are the reason to walk in: two of them, and only when you need one
+  torch.battery = 1;
+  if (!arc.resolveAction(cells)?.disabled) fail('offered a cell with a full torch');
+  torch.battery = 0.2;
+  for (let i = 2; i > 0; i--) {
+    const take = arc.resolveAction(cells);
+    if (!take || take.disabled) fail(`could not take a cell with ${i} left`);
+    take.run();
+    if (torch.battery !== 1) fail('taking a cell did not refill the torch');
+    torch.battery = 0.2;
+  }
+  if (!arc.resolveAction(cells)?.disabled) fail('the shelf handed out more cells than it had');
+
+  // there has to be a way off the floor in a room with one exit
+  const refuge = stations.filter((s) => s.kind === 'hide' && inTapeLibrary(s.position));
+  if (refuge.length !== 1) fail(`${refuge.length} hiding places in the archive, expected 1`);
+
+  // ---- it can follow you in ----
+  const it = arc.entity;
+  it.spawn();
+  it.teleport(new THREE.Vector3(0, 0, -3.7));
+  it._repath(cells.position);
+  if (!it.path.length) fail('the entity cannot path into the archive at all');
+  if (!inTapeLibrary(it.path.at(-1).pos)) {
+    fail('the entity path towards the archive stops short of it');
+  }
+  // and back out
+  it.teleport(new THREE.Vector3(6.6, 0, 14.6));
+  it._repath(new THREE.Vector3(0, 0, -9.8));
+  if (!it.path.length) fail('the entity cannot find its way back out of the archive');
+  if (it.path.at(-1).pos.z > 11) fail('the entity cannot leave the archive');
+  it.despawn();
+
+  // the thermal map does not cover the archive, and should not pretend to
+  if (arc._onCamera(cells.position.x, cells.position.z)) {
+    fail('the archive shows up on the hall camera');
+  }
+  if (!arc._onCamera(0, 0)) fail('the middle of the hall is somehow off camera');
+
+  // its light is the first thing the bank lets go of
+  const { EMERGENCY, rig: lightRig } = await import('../src/world.js');
+  setLightingMode('night');
+  const archiveLamp = lightRig.emergency[EMERGENCY.shedOrder[0]];
+  if (Math.abs(archiveLamp.lamp.position.z - (TAPE_LIBRARY.minZ + 2.8)) > 0.01) {
+    fail('the first fitting shed is not the one in the archive');
+  }
+  console.log('archive OK · one door, no cover, two cells, one hiding place, it can follow');
+}
+
 console.log('smoke test OK');

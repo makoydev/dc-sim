@@ -161,6 +161,39 @@ Two rules that fell out of building it:
   it permanently "playing", which wedged the desk shut — handover included.
   The one place in this mode where a soft-lock was reachable.
 
+## 4b. The tape archive
+
+The night needed somewhere to *go*. Everything else in the mode happens on the
+same floor you already learned by day, and there is deliberately no genset room
+to walk to — so the hall is the whole world, and by the back half you have been
+round it enough times.
+
+The archive is a room off the south wall. Badged shut on days; by the time you
+come on at night it is standing open, and nobody has an explanation for that.
+
+**It has no cooling in it.** That is the entire design. The fan wall is what
+covers your noise everywhere else in the building, and it does not reach in
+here: masking drops from 0.80 to 0.08 the moment you step through the door.
+Every footstep, and every second of a hold-to-work, carries almost in full. It
+is the same rule as a tripped CRAC, applied to a whole room and permanently.
+
+**The reason to go in is the spare torch cells.** Two of them, on a bench at
+the back. The torch is the only reliable light once the bank starts shedding
+zones, and its refills are kept in the quietest, darkest room in the building —
+so the thing you need light for is the thing you have to go without light to
+get. Nothing asks you to do it and it is on no checklist, exactly like the UPS
+self-test.
+
+**Its light is the first thing the bank sheds**, and on an untested bank that
+happens twenty-two per cent into the shift — before you are likely to want a
+cell. Self-testing the cabinets pushes it out to over halfway. So the two
+optional errands in the mode are quietly about each other: the boring one at
+22:00 is what buys you a lit archive at 03:00.
+
+One door, no second way out, and the entity can path in. That is why there is a
+media cabinet in the back corner to get inside — a dead-end room with a hunter
+in it and nowhere to go is not tension, it is a coin flip.
+
 ## 5. Light as a resource
 
 The best structural idea in the mode: **emergency lighting runs off the UPS.**
@@ -179,18 +212,18 @@ resent spending.
 ### How it was built
 
 One hall-level reserve, drained against a capacity the bank's self-tests set:
-`capacity = duration × (0.72 + 0.37 × cabinets tested)`. Six emergency
-fittings, shed one at a time as the reserve falls past 0.62 / 0.48 / 0.34 /
-0.22 / 0.12, with the survivors dimming on a curve that stays flat until the
-bank is well down. Across the spots you actually stand in, a flat bank is 7x
+`capacity = duration × (0.72 + 0.37 × cabinets tested)`. Seven emergency
+fittings, shed one at a time as the reserve falls past 0.70 / 0.58 / 0.46 /
+0.34 / 0.22 / 0.12, with the survivors dimming on a curve that stays flat until
+the bank is well down. Across the spots you actually stand in, a flat bank is 7x
 darker than a full one.
 
-| Cabinets tested | Down to one fitting | Ends the shift on |
-| --- | --- | --- |
-| none | 63% in (05:36) | 1 of 6, at minimum brightness |
-| one | 96% in (09:30) | 1 of 6 |
-| two | never | 3 of 6 |
-| all three | never | 4 of 6, at 83% |
+| Cabinets tested | Archive goes dark | Down to one fitting | Ends the shift on |
+| --- | --- | --- | --- |
+| none | 22% in (00:35) | 63% in (05:36) | 1 of 7, at minimum brightness |
+| one | 33% in (01:55) | 96% in (09:30) | 1 of 7 |
+| two | 44% in (03:15) | never | 3 of 7 |
+| all three | 55% in (04:35) | never | 4 of 7, at 83% |
 
 Four decisions worth keeping:
 
@@ -287,6 +320,8 @@ Deliberately back to front. Step 3 before step 4 is the whole trick.
       back (§5)
 - [x] 7 — the camera loop: the thermal map as the building's only camera, live
       and recorded, read from the one desk that is nowhere near your work (§4a)
+- [x] 8 — the tape archive: a room with no cooling in it, the torch cells at
+      the back of it, and one way out (§4b)
 
 The build order is finished.
 
@@ -370,6 +405,13 @@ heating. That is deliberate — see §2.
   fitting at the end — indistinguishable from noise. The per-test step went up
   more than threefold. If a mechanic is optional and costs a walk across the
   hall, the reward has to be obvious from across the hall too.
+- **A long collider is not a big collider.** Player collision resolved one axis
+  at a time and chose which side to push you out of by which half of the box you
+  were in. That is fine for a rack and very wrong for a six-metre shelf run:
+  touching the *front* of one put you level with whichever *end* was nearer, so
+  walking into the archive shelving threw you three metres sideways. It had been
+  in there the whole time and no hall prop was long enough to show it. Pushing
+  out along the nearest face instead has no such failure mode.
 - **`npm run lights` now samples the night as well.** The drain is a curve with
   five thresholds on it, and arguing about whether it feels right is much easier
   against a table of numbers than a screenshot. The fixture positions and the
@@ -381,6 +423,5 @@ heating. That is deliberate — see §2.
 
 - **Co-op.** Two engineers, one ticket queue, one radio. The obvious end state,
   and the reason to keep the sim honest.
-- **The tape library.** A room the day shift never opens. The night has nowhere
-  to *go* — there is no genset room to walk to — and this is the answer.
+- ~~**The tape library.**~~ Built — see §4b.
 - ~~**Camera review.**~~ Built — see §4a.

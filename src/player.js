@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { colliders, HALL } from './world.js';
+import { clampToRooms, colliders } from './world.js';
 
 const EYE = 1.68;
 const RADIUS = 0.34;
@@ -117,33 +117,53 @@ export class Player {
 
   _move(dx, dz) {
     this.position.x += dx;
-    this._resolve('x');
     this.position.z += dz;
-    this._resolve('z');
+    // twice, so a corner where two colliders meet settles instead of leaving
+    // the player inside the second one
+    this._resolve();
+    this._resolve();
 
-    const pad = RADIUS + 0.2;
-    this.position.x = THREE.MathUtils.clamp(
-      this.position.x, HALL.minX + pad, HALL.maxX - pad,
-    );
-    this.position.z = THREE.MathUtils.clamp(
-      this.position.z, HALL.minZ + pad, HALL.maxZ - pad,
-    );
+    clampToRooms(this.position, RADIUS + 0.2);
   }
 
-  _resolve(axis) {
+  /**
+   * Pushes the player out of anything they are standing in, along whichever
+   * face is nearest.
+   *
+   * The nearest face is the point. This used to resolve one axis at a time and
+   * pick the side by which half of the box the player was in, which is fine for
+   * a box roughly your own size and very wrong for a long one: touching the
+   * front of a six-metre shelf run put you level with whichever *end* of it you
+   * were nearer, so walking into the tape archive shelving threw you sideways
+   * across the room. Minimum penetration is the standard fix and has no such
+   * failure mode.
+   */
+  _resolve() {
     const p = this.position;
     for (const b of colliders) {
-      const nx = THREE.MathUtils.clamp(p.x, b.minX, b.maxX);
-      const nz = THREE.MathUtils.clamp(p.z, b.minZ, b.maxZ);
-      const dx = p.x - nx;
-      const dz = p.z - nz;
-      if (dx * dx + dz * dz >= RADIUS * RADIUS) continue;
+      if (b.open) continue; // a door that is standing open is not a wall
+      const minX = b.minX - RADIUS;
+      const maxX = b.maxX + RADIUS;
+      const minZ = b.minZ - RADIUS;
+      const maxZ = b.maxZ + RADIUS;
+      if (p.x <= minX || p.x >= maxX || p.z <= minZ || p.z >= maxZ) continue;
 
-      if (axis === 'x') {
-        p.x = p.x < (b.minX + b.maxX) / 2 ? b.minX - RADIUS : b.maxX + RADIUS;
+      const west = p.x - minX;
+      const east = maxX - p.x;
+      const north = p.z - minZ;
+      const south = maxZ - p.z;
+      const least = Math.min(west, east, north, south);
+      if (least === west) {
+        p.x = minX;
         this.velocity.x = 0;
+      } else if (least === east) {
+        p.x = maxX;
+        this.velocity.x = 0;
+      } else if (least === north) {
+        p.z = minZ;
+        this.velocity.z = 0;
       } else {
-        p.z = p.z < (b.minZ + b.maxZ) / 2 ? b.minZ - RADIUS : b.maxZ + RADIUS;
+        p.z = maxZ;
         this.velocity.z = 0;
       }
     }

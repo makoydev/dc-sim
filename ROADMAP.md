@@ -58,6 +58,12 @@ Effort is a rough estimate for one person:
   the capacity back. An untested bank is down to its last light two thirds in;
   a tested one still has four burning at the end. `npm run lights` samples the
   drain so it can be tuned as numbers. (`world.js`, `game.js`, HORROR.md §5)
+- **The tape archive.** A room off the south wall with no cooling in it, so the
+  fan wall that covers your noise everywhere else does not reach inside — the
+  night finally has somewhere to go. The spare torch cells are at the back of
+  it, and its light is the first thing the UPS bank sheds. Also fixed a
+  collision bug it exposed: resolving one axis at a time slid the player along
+  long obstacles. (`world.js`, `props.js`, `player.js`, HORROR.md §4b)
 - **4.2 Post-processing.** Bloom and a vignette, hand-rolled rather than pulled
   from three's `addons/` — four fullscreen passes, three of them at quarter
   resolution, and no new vendored files. It works on the tone-mapped image
@@ -277,13 +283,13 @@ The direction is to keep pushing the horror, so in order:
    themselves are unverified. The numbers in `post.js:LOOK` are guesses and
    almost certainly want tuning by eye. `P` toggles it and F3 reports whether
    it is on.
-1. **The tape library** (HORROR.md §11). A room the day shift never opens. The
-   night has nowhere to *go* — there is no genset room to walk to — and this is
-   the answer, but it is real geometry.
-2. **5.1 positional audio.** Currently the night's central rule, *the fans cover
-   you*, is something you are told rather than something you hear. Putting the
-   hum on the CRACs makes the masking system legible by ear, which is where it
-   should have been all along.
+1. **5.1 positional audio.** The night's central rule — *the fans cover you* —
+   is still something you are told rather than something you hear, and the
+   archive has just made it load-bearing: a room whose whole identity is "no fan
+   noise in here" should be obvious the moment you step through the door. This
+   is now the biggest gap between how the mode works and how it reads.
+2. **1.10 persistence.** Settings, best scores, and the other half of §5 — day
+   shift self-tests paying off at night.
 
 Off to the side, **1.10 persistence** is worth more than its size suggests: it
 is what unlocks the other half of §5, where the day shift's UPS self-tests are

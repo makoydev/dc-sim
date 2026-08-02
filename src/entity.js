@@ -56,6 +56,38 @@ function buildGraph() {
       b.links.push(a.id);
     }
   }
+
+  // The archive, through the one door in the south wall. It can follow you in
+  // there, and there is no second way out — which is the price of the room.
+  const extra = (x, z) => {
+    const node = { id: nodes.length, pos: new THREE.Vector3(x, 0, z), contained: false, links: [] };
+    nodes.push(node);
+    return node;
+  };
+  const join = (a, b) => {
+    a.links.push(b.id);
+    b.links.push(a.id);
+  };
+
+  const door = extra(6.6, 11.9);
+  join(door, at(6.6, 9.3));
+  const west = [extra(3.2, 12.4), extra(3.2, 14.6), extra(3.2, 16.6)];
+  const east = [extra(10.0, 12.4), extra(10.0, 14.6), extra(10.0, 16.6)];
+  const mid = extra(6.6, 16.6);
+  join(door, west[0]);
+  join(door, east[0]);
+  for (let i = 0; i < 2; i++) {
+    join(west[i], west[i + 1]);
+    join(east[i], east[i + 1]);
+  }
+  // the back of the room is open, so the two side corridors meet there
+  join(west[2], mid);
+  join(mid, east[2]);
+  // and the gap between the two shelf runs crosses the middle
+  const between = extra(6.6, 14.6);
+  join(west[1], between);
+  join(between, east[1]);
+
   return nodes;
 }
 

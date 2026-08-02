@@ -102,7 +102,11 @@ const fail = (msg) => {
 };
 // Draw calls are no longer the bottleneck at this scale — the light count and
 // the pixel ratio are — but this budget stops the scene creeping back up.
-if (day.drawCalls > 280) fail(`${day.drawCalls} draw calls in day mode, budget 280`);
+// Raised 280 -> 300 when the tape archive was added: a room with a shell and
+// three interactive props in it is about twenty calls, and that is the real
+// price of the room rather than creep. Its 160 cartridges and its shelving are
+// instanced, which this budget is what caught.
+if (day.drawCalls > 300) fail(`${day.drawCalls} draw calls in day mode, budget 300`);
 if (day.lights > 18) fail(`${day.lights} lights in day mode, budget 18`);
 if (night.lights > 10) fail(`${night.lights} lights at night, budget 10`);
 console.log('\nwithin budget');

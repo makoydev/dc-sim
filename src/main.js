@@ -44,7 +44,7 @@ const entity = new Entity({ scene, player, racks, hud, audio });
 const partner = new Partner({ hud, audio, entity });
 const coach = new Coach(hud);
 const game = new Game({
-  scene, camera, player, racks, stations, hud, audio, presence, entity, partner,
+  scene, camera, player, racks, stations, hud, audio, presence, entity, partner, torch,
 });
 const interaction = new Interaction(camera, scene, (target) => game.resolveAction(target));
 const highlighter = new Highlighter(scene);
